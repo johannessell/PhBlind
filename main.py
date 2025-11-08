@@ -5,6 +5,7 @@ print("Current working directory:", os.getcwd())
 
 image1 = cv2.imread('img/sample.jpg')
 image2 = cv2.imread('img/PXL_20250808_175205192.MP.jpg')
+image2 = cv2.imread('img/PXL_20250808_175202897.MP.jpg')
 
 
 

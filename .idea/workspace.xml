@@ -1,11 +1,44 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project version="4">
+  <component name="AutoImportSettings">
+    <option name="autoReloadType" value="SELECTIVE" />
+  </component>
   <component name="ChangeListManager">
-    <list default="true" id="40b0e958-e1fe-4e84-bd8b-7a1339b25bfb" name="Changes" comment="" />
+    <list default="true" id="40b0e958-e1fe-4e84-bd8b-7a1339b25bfb" name="Changes" comment="create git">
+      <change afterPath="$PROJECT_DIR$/TemplateEditor.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/app.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/app02.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/app03.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/app04_ocr.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/app_part1.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/contour_detection.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/contour_detection02.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/contour_grabCut.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/keypoints.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/main_bounding.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/main_bounding_02.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/main_bounding_orb.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/ocr_example.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/template_matching.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/template_utils.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/thresholding_methods.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/main.py" beforeDir="false" afterPath="$PROJECT_DIR$/main.py" afterDir="false" />
+    </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
     <option name="LAST_RESOLUTION" value="IGNORE" />
+  </component>
+  <component name="FileTemplateManagerImpl">
+    <option name="RECENT_TEMPLATES">
+      <list>
+        <option value="Python Script" />
+      </list>
+    </option>
+  </component>
+  <component name="Git.Settings">
+    <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$" />
   </component>
   <component name="ProjectColorInfo">{
   &quot;associatedIndex&quot;: 6
@@ -15,49 +48,51 @@
     <option name="hideEmptyMiddlePackages" value="true" />
     <option name="showLibraryContents" value="true" />
   </component>
-  <component name="PropertiesComponent">{
-  &quot;keyToString&quot;: {
-    &quot;ModuleVcsDetector.initialDetectionPerformed&quot;: &quot;true&quot;,
-    &quot;RunOnceActivity.ShowReadmeOnStart&quot;: &quot;true&quot;
+  <component name="PropertiesComponent"><![CDATA[{
+  "keyToString": {
+    "ModuleVcsDetector.initialDetectionPerformed": "true",
+    "Python.TemplateEditor.executor": "Run",
+    "Python.Unnamed.executor": "Run",
+    "Python.app.executor": "Run",
+    "Python.app02.executor": "Run",
+    "Python.app03.executor": "Run",
+    "Python.app04_ocr.executor": "Run",
+    "Python.app_part1.executor": "Run",
+    "Python.contour_detection.executor": "Run",
+    "Python.contour_detection02.executor": "Run",
+    "Python.contour_detection03.executor": "Run",
+    "Python.infos_from_roi.executor": "Run",
+    "Python.keypoints.executor": "Run",
+    "Python.main.executor": "Run",
+    "Python.main02.executor": "Run",
+    "Python.main_bounding.executor": "Run",
+    "Python.main_bounding_02.executor": "Run",
+    "Python.main_bounding_orb.executor": "Run",
+    "Python.ocr_example.executor": "Run",
+    "Python.template_matching.executor": "Run",
+    "Python.thresholding_methods.executor": "Debug",
+    "RunOnceActivity.ShowReadmeOnStart": "true",
+    "RunOnceActivity.TerminalTabsStorage.copyFrom.TerminalArrangementManager.252": "true",
+    "RunOnceActivity.git.unshallow": "true",
+    "git-widget-placeholder": "master",
+    "last_opened_file_path": "C:/Users/johan/PycharmProjects/PhBlind",
+    "node.js.detected.package.eslint": "true",
+    "node.js.detected.package.tslint": "true",
+    "node.js.selected.package.eslint": "(autodetect)",
+    "node.js.selected.package.tslint": "(autodetect)",
+    "nodejs_package_manager_path": "npm",
+    "settings.editor.selected.configurable": "org.jetbrains.plugins.github.ui.GithubSettingsConfigurable",
+    "vue.rearranger.settings.migration": "true"
   }
-}</component>
-  <component name="RunManager">
-    <configuration default="true" type="PythonConfigurationType" factoryName="Python">
-      <module name="PhBlind" />
-      <option name="ENV_FILES" value="" />
-      <option name="INTERPRETER_OPTIONS" value="" />
-      <option name="PARENT_ENVS" value="true" />
-      <envs>
-        <env name="PYTHONUNBUFFERED" value="1" />
-      </envs>
-      <option name="SDK_HOME" value="" />
-      <option name="WORKING_DIRECTORY" value="" />
-      <option name="IS_MODULE_SDK" value="false" />
-      <option name="ADD_CONTENT_ROOTS" value="true" />
-      <option name="ADD_SOURCE_ROOTS" value="true" />
-      <EXTENSION ID="PythonCoverageRunConfigurationExtension" runner="coverage.py" />
-      <option name="SCRIPT_NAME" value="" />
-      <option name="PARAMETERS" value="" />
-      <option name="SHOW_COMMAND_LINE" value="false" />
-      <option name="EMULATE_TERMINAL" value="false" />
-      <option name="MODULE_MODE" value="false" />
-      <option name="REDIRECT_INPUT" value="false" />
-      <option name="INPUT_FILE" value="" />
-      <method v="2" />
-    </configuration>
-    <configuration default="true" type="Tox" factoryName="Tox">
-      <module name="PhBlind" />
-      <option name="ENV_FILES" value="" />
-      <option name="INTERPRETER_OPTIONS" value="" />
-      <option name="PARENT_ENVS" value="true" />
-      <option name="SDK_HOME" value="" />
-      <option name="WORKING_DIRECTORY" value="" />
-      <option name="IS_MODULE_SDK" value="false" />
-      <option name="ADD_CONTENT_ROOTS" value="true" />
-      <option name="ADD_SOURCE_ROOTS" value="true" />
-      <EXTENSION ID="PythonCoverageRunConfigurationExtension" runner="coverage.py" />
-      <method v="2" />
-    </configuration>
+}]]></component>
+  <component name="RecentsManager">
+    <key name="CopyFile.RECENT_KEYS">
+      <recent name="C:\Users\johan\PycharmProjects\PhBlind" />
+    </key>
+    <key name="MoveFile.RECENT_KEYS">
+      <recent name="C:\Users\johan\PycharmProjects\PhBlind" />
+      <recent name="C:\Users\johan\PycharmProjects\PhBlind\img" />
+    </key>
   </component>
   <component name="SharedIndexes">
     <attachedChunks>
@@ -73,7 +108,125 @@
       <option name="number" value="Default" />
       <option name="presentableId" value="Default" />
       <updated>1756140907157</updated>
+      <workItem from="1756140948978" duration="1044000" />
+      <workItem from="1756210998638" duration="3015000" />
+      <workItem from="1756214050740" duration="4124000" />
+      <workItem from="1756220991813" duration="196000" />
+      <workItem from="1756221201510" duration="2483000" />
+      <workItem from="1756225864578" duration="2000" />
+      <workItem from="1756230749057" duration="7061000" />
+      <workItem from="1756315553547" duration="2405000" />
+      <workItem from="1756923215865" duration="3687000" />
+      <workItem from="1757102628231" duration="4300000" />
+      <workItem from="1757148201947" duration="2413000" />
+      <workItem from="1757163023330" duration="2575000" />
+      <workItem from="1757187623831" duration="503000" />
+      <workItem from="1757230682744" duration="5164000" />
+      <workItem from="1757241584434" duration="573000" />
+      <workItem from="1757242184123" duration="3253000" />
+      <workItem from="1757262743161" duration="2322000" />
+      <workItem from="1757353829921" duration="3255000" />
+      <workItem from="1757434931052" duration="4756000" />
+      <workItem from="1757528047970" duration="3148000" />
+      <workItem from="1757531269285" duration="563000" />
+      <workItem from="1757684189566" duration="3118000" />
+      <workItem from="1757794061034" duration="5736000" />
+      <workItem from="1762613724451" duration="7000" />
     </task>
+    <task id="LOCAL-00001" summary="create git">
+      <option name="closed" value="true" />
+      <created>1756141101043</created>
+      <option name="number" value="00001" />
+      <option name="presentableId" value="LOCAL-00001" />
+      <option name="project" value="LOCAL" />
+      <updated>1756141101043</updated>
+    </task>
+    <task id="LOCAL-00002" summary="create git">
+      <option name="closed" value="true" />
+      <created>1756230789048</created>
+      <option name="number" value="00002" />
+      <option name="presentableId" value="LOCAL-00002" />
+      <option name="project" value="LOCAL" />
+      <updated>1756230789048</updated>
+    </task>
+    <option name="localTasksCounter" value="3" />
     <servers />
+  </component>
+  <component name="TypeScriptGeneratedFilesManager">
+    <option name="version" value="3" />
+  </component>
+  <component name="Vcs.Log.Tabs.Properties">
+    <option name="TAB_STATES">
+      <map>
+        <entry key="MAIN">
+          <value>
+            <State>
+              <option name="FILTERS">
+                <map>
+                  <entry key="branch">
+                    <value>
+                      <list>
+                        <option value="master" />
+                      </list>
+                    </value>
+                  </entry>
+                </map>
+              </option>
+            </State>
+          </value>
+        </entry>
+      </map>
+    </option>
+  </component>
+  <component name="VcsManagerConfiguration">
+    <MESSAGE value="create git" />
+    <option name="LAST_COMMIT_MESSAGE" value="create git" />
+  </component>
+  <component name="XDebuggerManager">
+    <breakpoint-manager>
+      <breakpoints>
+        <line-breakpoint enabled="true" suspend="THREAD" type="python-line">
+          <url>file://$PROJECT_DIR$/thresholding_methods.py</url>
+          <line>44</line>
+          <option name="timeStamp" value="2" />
+        </line-breakpoint>
+        <line-breakpoint enabled="true" log-message="true" suspend="NONE" type="python-line">
+          <url>file://$PROJECT_DIR$/contour_detection02.py</url>
+          <line>208</line>
+          <option name="timeStamp" value="3" />
+        </line-breakpoint>
+        <line-breakpoint enabled="true" suspend="THREAD" type="python-line">
+          <url>file://$PROJECT_DIR$/contour_detection02.py</url>
+          <line>168</line>
+          <option name="timeStamp" value="6" />
+        </line-breakpoint>
+        <line-breakpoint enabled="true" suspend="THREAD" type="python-line">
+          <url>file://$PROJECT_DIR$/ocr_example.py</url>
+          <line>5</line>
+          <option name="timeStamp" value="7" />
+        </line-breakpoint>
+      </breakpoints>
+    </breakpoint-manager>
+  </component>
+  <component name="com.intellij.coverage.CoverageDataManagerImpl">
+    <SUITE FILE_PATH="coverage/PhBlind$thresholding_methods.coverage" NAME="thresholding_methods Coverage Results" MODIFIED="1756926841742" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
+    <SUITE FILE_PATH="coverage/PhBlind$contour_detection.coverage" NAME="contour_detection Coverage Results" MODIFIED="1757356266405" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
+    <SUITE FILE_PATH="coverage/PhBlind$main02.coverage" NAME="main02 Coverage Results" MODIFIED="1757355700333" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
+    <SUITE FILE_PATH="coverage/PhBlind$infos_from_roi.coverage" NAME="infos_from_roi Coverage Results" MODIFIED="1757150465226" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
+    <SUITE FILE_PATH="coverage/PhBlind$main_bounding_02.coverage" NAME="main_bounding_02 Coverage Results" MODIFIED="1757188109167" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
+    <SUITE FILE_PATH="coverage/PhBlind$keypoints.coverage" NAME="keypoints Coverage Results" MODIFIED="1757230916963" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
+    <SUITE FILE_PATH="coverage/PhBlind$contour_detection03.coverage" NAME="contour_detection03 Coverage Results" MODIFIED="1757746904038" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
+    <SUITE FILE_PATH="coverage/PhBlind$app03.coverage" NAME="app03 Coverage Results" MODIFIED="1757263256081" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
+    <SUITE FILE_PATH="coverage/PhBlind$app02.coverage" NAME="app02 Coverage Results" MODIFIED="1757246951318" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
+    <SUITE FILE_PATH="coverage/PhBlind$app04_ocr.coverage" NAME="app04_ocr Coverage Results" MODIFIED="1757264911665" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
+    <SUITE FILE_PATH="coverage/PhBlind$contour_detection02.coverage" NAME="contour_detection02 Coverage Results" MODIFIED="1757441259776" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
+    <SUITE FILE_PATH="coverage/PhBlind$TemplateEditor.coverage" NAME="TemplateEditor Coverage Results" MODIFIED="1757354549439" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
+    <SUITE FILE_PATH="coverage/PhBlind$template_matching.coverage" NAME="template_matching Coverage Results" MODIFIED="1757231228316" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
+    <SUITE FILE_PATH="coverage/PhBlind$main_bounding_orb.coverage" NAME="main_bounding_orb Coverage Results" MODIFIED="1756234422189" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
+    <SUITE FILE_PATH="coverage/PhBlind$main.coverage" NAME="main Coverage Results" MODIFIED="1756231176239" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
+    <SUITE FILE_PATH="coverage/PhBlind$app.coverage" NAME="app Coverage Results" MODIFIED="1757187144595" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
+    <SUITE FILE_PATH="coverage/PhBlind$app_part1.coverage" NAME="app_part1 Coverage Results" MODIFIED="1757235599973" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
+    <SUITE FILE_PATH="coverage/PhBlind$main_bounding.coverage" NAME="main_bounding Coverage Results" MODIFIED="1756231603987" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
+    <SUITE FILE_PATH="coverage/PhBlind$ocr_example.coverage" NAME="ocr_example Coverage Results" MODIFIED="1757846478624" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
   </component>
 </project>

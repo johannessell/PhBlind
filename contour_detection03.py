@@ -157,6 +157,74 @@ alpha = 0.5
 overlayed = cv2.addWeighted(cropped_image, 1-alpha, cropped_with_grid, alpha, 0)
 
 # -------------------------------
+# Vollständigen HSV-Mittelwert pro Grid-Zelle berechnen
+# -------------------------------
+hsv = cv2.cvtColor(cropped_image, cv2.COLOR_BGR2HSV)
+overlay_hsv = overlayed.copy()
+grid_hsv_stats = []
+
+for idx, (x, y, w, h) in enumerate(rects_grid):
+
+    roi = hsv[y:y+h, x:x+w]
+
+    if roi.size > 0:
+        H = float(np.median(roi[:,:,0]))
+        S = float(np.median(roi[:,:,1]))
+        V = float(np.median(roi[:,:,2]))
+    else:
+        H = S = V = None
+
+    grid_hsv_stats.append((idx, x, y, w, h, H, S, V))
+
+    # Text im Bild darstellen, wenn Werte vorhanden
+    if H is not None:
+        cv2.putText(
+            overlay_hsv,
+            f"H:{H:.0f}",
+            (x + 3, y + int(h * 0.45)),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.55,
+            (255,255,255),
+            2,
+            cv2.LINE_AA
+        )
+        # cv2.putText(
+        #     overlay_hsv,
+        #     f"S:{S:.0f} V:{V:.0f}",
+        #     (x + 3, y + int(h * 0.8)),
+        #     cv2.FONT_HERSHEY_SIMPLEX,
+        #     0.50,
+        #     (255,255,255),
+        #     2,
+        #     cv2.LINE_AA
+        # )
+
+print("\n--- HSV pro Grid-Zelle ---")
+for cell in grid_hsv_stats:
+    idx, x, y, w, h, H, S, V = cell
+    print(f"Zelle {idx:02d}: H={H:.1f}, S={S:.1f}, V={V:.1f}  (x={x}, y={y}, w={w}, h={h})")
+
+# -------------------------------
+# Zellen farblich markieren, falls S < 10
+# -------------------------------
+overlay_marked = overlay_hsv.copy()
+
+for (idx, x, y, w, h, H, S, V) in grid_hsv_stats:
+    if S is not None and S < 20:
+        # sehr geringe Sättigung -> schwach / weiß / unmarkiert
+        color = (255, 0, 0)   # ROTER Rahmen für "zu blass"
+    else:
+        color = (0, 255, 0)   # GRÜNER Rahmen für "ok"
+
+    cv2.rectangle(
+        overlay_marked,
+        (x, y),
+        (x + w, y + h),
+        color,
+        3
+    )
+
+# -------------------------------
 # 9b. Median HSB-B-Kanal je Spalte
 # -------------------------------
 # Cropped-Image in HSV umwandeln
@@ -221,6 +289,6 @@ plt.title("Cropped + Gefüllte Rechtecke")
 plt.imshow(cv2.cvtColor(wrapped, cv2.COLOR_BGR2RGB))
 
 plt.subplot(1,3,3)
-plt.title("Overlay + Grid")
-plt.imshow(cv2.cvtColor(overlayed, cv2.COLOR_BGR2RGB))
+plt.title("Overlay + Grid + Hue")
+plt.imshow(cv2.cvtColor(overlay_marked, cv2.COLOR_BGR2RGB))
 plt.show()

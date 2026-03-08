@@ -4,8 +4,10 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="40b0e958-e1fe-4e84-bd8b-7a1339b25bfb" name="Changes" comment="create git">
+    <list default="true" id="40b0e958-e1fe-4e84-bd8b-7a1339b25bfb" name="Changes" comment="git remote add origin git@github.com:johannessell/PhBlind.git&#10;git branch -M main&#10;git push -u origin main">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/contour_detection03.py" beforeDir="false" afterPath="$PROJECT_DIR$/contour_detection03.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/ocr_example.py" beforeDir="false" afterPath="$PROJECT_DIR$/ocr_example.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -150,13 +152,26 @@
       <option name="project" value="LOCAL" />
       <updated>1762614299960</updated>
     </task>
-    <option name="localTasksCounter" value="5" />
+    <task id="LOCAL-00005" summary="git remote add origin git@github.com:johannessell/PhBlind.git&#10;git branch -M main&#10;git push -u origin main">
+      <option name="closed" value="true" />
+      <created>1762614606054</created>
+      <option name="number" value="00005" />
+      <option name="presentableId" value="LOCAL-00005" />
+      <option name="project" value="LOCAL" />
+      <updated>1762614606054</updated>
+    </task>
+    <option name="localTasksCounter" value="6" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
     <option name="version" value="3" />
   </component>
   <component name="Vcs.Log.Tabs.Properties">
+    <option name="OPEN_GENERIC_TABS">
+      <map>
+        <entry key="fa7e4874-281b-4136-840b-a4569d713261" value="TOOL_WINDOW" />
+      </map>
+    </option>
     <option name="TAB_STATES">
       <map>
         <entry key="MAIN">
@@ -176,12 +191,18 @@
             </State>
           </value>
         </entry>
+        <entry key="fa7e4874-281b-4136-840b-a4569d713261">
+          <value>
+            <State />
+          </value>
+        </entry>
       </map>
     </option>
   </component>
   <component name="VcsManagerConfiguration">
     <MESSAGE value="create git" />
-    <option name="LAST_COMMIT_MESSAGE" value="create git" />
+    <MESSAGE value="git remote add origin git@github.com:johannessell/PhBlind.git&#10;git branch -M main&#10;git push -u origin main" />
+    <option name="LAST_COMMIT_MESSAGE" value="git remote add origin git@github.com:johannessell/PhBlind.git&#10;git branch -M main&#10;git push -u origin main" />
   </component>
   <component name="XDebuggerManager">
     <breakpoint-manager>

@@ -64,7 +64,7 @@ class OCRApp(App):
         print(f"Detected angle: {angle} degrees")
 
         # OCR-Erkennung
-        results = self.reader.readtext(img, rotation_info=[0, 90, 180, 270])
+        results = self.reader.readtext(img, rotation_info=[0] , allowlist="0123456789,phPHOombMBgGlL/.")
 
         # Bounding Boxes + Text + Confidence einzeichnen
         for (bbox, text, prob) in results:

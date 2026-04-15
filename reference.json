@@ -1,0 +1,987 @@
+{
+  "image_file": "template02.jpg",
+  "parameters": [
+    {
+      "name": "pH",
+      "group_idx": 0,
+      "cols": [
+        0,
+        1
+      ],
+      "measure_col": 0
+    },
+    {
+      "name": "H2O2",
+      "group_idx": 1,
+      "cols": [
+        2,
+        3,
+        4
+      ],
+      "measure_col": 3
+    },
+    {
+      "name": "PHMB",
+      "group_idx": 2,
+      "cols": [
+        5,
+        6
+      ],
+      "measure_col": 6
+    }
+  ],
+  "cells": [
+    {
+      "cell_idx": 0,
+      "row_idx": 0,
+      "group_idx": 0,
+      "parameter": "pH",
+      "is_color_cell": false,
+      "x": 19,
+      "y": 48,
+      "w": 87,
+      "h": 39,
+      "hsv_median": [
+        10.0,
+        56.0,
+        102.0
+      ],
+      "value": null
+    },
+    {
+      "cell_idx": 1,
+      "row_idx": 0,
+      "group_idx": 0,
+      "parameter": "pH",
+      "is_color_cell": true,
+      "x": 129,
+      "y": 48,
+      "w": 71,
+      "h": 39,
+      "hsv_median": [
+        10.0,
+        60.0,
+        93.0
+      ],
+      "value": null
+    },
+    {
+      "cell_idx": 2,
+      "row_idx": 0,
+      "group_idx": 1,
+      "parameter": "H2O2",
+      "is_color_cell": true,
+      "x": 209,
+      "y": 48,
+      "w": 42,
+      "h": 39,
+      "hsv_median": [
+        11.0,
+        60.0,
+        92.0
+      ],
+      "value": null
+    },
+    {
+      "cell_idx": 3,
+      "row_idx": 0,
+      "group_idx": 1,
+      "parameter": "H2O2",
+      "is_color_cell": false,
+      "x": 281,
+      "y": 48,
+      "w": 81,
+      "h": 39,
+      "hsv_median": [
+        11.0,
+        55.0,
+        93.0
+      ],
+      "value": null
+    },
+    {
+      "cell_idx": 4,
+      "row_idx": 0,
+      "group_idx": 1,
+      "parameter": "H2O2",
+      "is_color_cell": true,
+      "x": 393,
+      "y": 48,
+      "w": 43,
+      "h": 39,
+      "hsv_median": [
+        11.0,
+        44.0,
+        98.0
+      ],
+      "value": null
+    },
+    {
+      "cell_idx": 5,
+      "row_idx": 0,
+      "group_idx": 2,
+      "parameter": "PHMB",
+      "is_color_cell": true,
+      "x": 441,
+      "y": 48,
+      "w": 72,
+      "h": 39,
+      "hsv_median": [
+        11.0,
+        40.0,
+        105.0
+      ],
+      "value": null
+    },
+    {
+      "cell_idx": 6,
+      "row_idx": 0,
+      "group_idx": 2,
+      "parameter": "PHMB",
+      "is_color_cell": false,
+      "x": 539,
+      "y": 48,
+      "w": 89,
+      "h": 39,
+      "hsv_median": [
+        13.0,
+        31.0,
+        133.0
+      ],
+      "value": null
+    },
+    {
+      "cell_idx": 7,
+      "row_idx": 1,
+      "group_idx": 0,
+      "parameter": "pH",
+      "is_color_cell": false,
+      "x": 19,
+      "y": 96,
+      "w": 87,
+      "h": 38,
+      "hsv_median": [
+        10.0,
+        51.0,
+        121.0
+      ],
+      "value": 8.2
+    },
+    {
+      "cell_idx": 8,
+      "row_idx": 1,
+      "group_idx": 0,
+      "parameter": "pH",
+      "is_color_cell": true,
+      "x": 129,
+      "y": 96,
+      "w": 71,
+      "h": 38,
+      "hsv_median": [
+        175.0,
+        141.0,
+        128.0
+      ],
+      "value": null
+    },
+    {
+      "cell_idx": 9,
+      "row_idx": 1,
+      "group_idx": 1,
+      "parameter": "H2O2",
+      "is_color_cell": true,
+      "x": 209,
+      "y": 96,
+      "w": 42,
+      "h": 38,
+      "hsv_median": [
+        10.0,
+        150.0,
+        121.0
+      ],
+      "value": null
+    },
+    {
+      "cell_idx": 10,
+      "row_idx": 1,
+      "group_idx": 1,
+      "parameter": "H2O2",
+      "is_color_cell": false,
+      "x": 281,
+      "y": 96,
+      "w": 81,
+      "h": 38,
+      "hsv_median": [
+        11.0,
+        45.0,
+        120.0
+      ],
+      "value": 50.0
+    },
+    {
+      "cell_idx": 11,
+      "row_idx": 1,
+      "group_idx": 1,
+      "parameter": "H2O2",
+      "is_color_cell": true,
+      "x": 393,
+      "y": 96,
+      "w": 43,
+      "h": 38,
+      "hsv_median": [
+        11.0,
+        139.0,
+        147.0
+      ],
+      "value": null
+    },
+    {
+      "cell_idx": 12,
+      "row_idx": 1,
+      "group_idx": 2,
+      "parameter": "PHMB",
+      "is_color_cell": true,
+      "x": 441,
+      "y": 96,
+      "w": 72,
+      "h": 38,
+      "hsv_median": [
+        107.0,
+        67.0,
+        105.0
+      ],
+      "value": null
+    },
+    {
+      "cell_idx": 13,
+      "row_idx": 1,
+      "group_idx": 2,
+      "parameter": "PHMB",
+      "is_color_cell": false,
+      "x": 539,
+      "y": 96,
+      "w": 89,
+      "h": 38,
+      "hsv_median": [
+        14.0,
+        32.0,
+        151.0
+      ],
+      "value": 100.0
+    },
+    {
+      "cell_idx": 14,
+      "row_idx": 2,
+      "group_idx": 0,
+      "parameter": "pH",
+      "is_color_cell": false,
+      "x": 19,
+      "y": 144,
+      "w": 87,
+      "h": 40,
+      "hsv_median": [
+        11.0,
+        49.0,
+        136.0
+      ],
+      "value": 7.8
+    },
+    {
+      "cell_idx": 15,
+      "row_idx": 2,
+      "group_idx": 0,
+      "parameter": "pH",
+      "is_color_cell": true,
+      "x": 129,
+      "y": 144,
+      "w": 71,
+      "h": 40,
+      "hsv_median": [
+        0.0,
+        130.0,
+        140.0
+      ],
+      "value": null
+    },
+    {
+      "cell_idx": 16,
+      "row_idx": 2,
+      "group_idx": 1,
+      "parameter": "H2O2",
+      "is_color_cell": true,
+      "x": 209,
+      "y": 144,
+      "w": 42,
+      "h": 40,
+      "hsv_median": [
+        13.0,
+        147.0,
+        133.0
+      ],
+      "value": null
+    },
+    {
+      "cell_idx": 17,
+      "row_idx": 2,
+      "group_idx": 1,
+      "parameter": "H2O2",
+      "is_color_cell": false,
+      "x": 281,
+      "y": 144,
+      "w": 81,
+      "h": 40,
+      "hsv_median": [
+        12.0,
+        45.0,
+        127.0
+      ],
+      "value": 40.0
+    },
+    {
+      "cell_idx": 18,
+      "row_idx": 2,
+      "group_idx": 1,
+      "parameter": "H2O2",
+      "is_color_cell": true,
+      "x": 393,
+      "y": 144,
+      "w": 43,
+      "h": 40,
+      "hsv_median": [
+        14.0,
+        132.0,
+        142.0
+      ],
+      "value": null
+    },
+    {
+      "cell_idx": 19,
+      "row_idx": 2,
+      "group_idx": 2,
+      "parameter": "PHMB",
+      "is_color_cell": true,
+      "x": 441,
+      "y": 144,
+      "w": 72,
+      "h": 40,
+      "hsv_median": [
+        104.0,
+        66.0,
+        100.0
+      ],
+      "value": null
+    },
+    {
+      "cell_idx": 20,
+      "row_idx": 2,
+      "group_idx": 2,
+      "parameter": "PHMB",
+      "is_color_cell": false,
+      "x": 539,
+      "y": 144,
+      "w": 89,
+      "h": 40,
+      "hsv_median": [
+        14.0,
+        30.0,
+        155.0
+      ],
+      "value": 75.0
+    },
+    {
+      "cell_idx": 21,
+      "row_idx": 3,
+      "group_idx": 0,
+      "parameter": "pH",
+      "is_color_cell": false,
+      "x": 19,
+      "y": 191,
+      "w": 87,
+      "h": 39,
+      "hsv_median": [
+        9.0,
+        50.0,
+        136.0
+      ],
+      "value": 7.6
+    },
+    {
+      "cell_idx": 22,
+      "row_idx": 3,
+      "group_idx": 0,
+      "parameter": "pH",
+      "is_color_cell": true,
+      "x": 129,
+      "y": 191,
+      "w": 71,
+      "h": 39,
+      "hsv_median": [
+        3.0,
+        139.0,
+        142.0
+      ],
+      "value": null
+    },
+    {
+      "cell_idx": 23,
+      "row_idx": 3,
+      "group_idx": 1,
+      "parameter": "H2O2",
+      "is_color_cell": true,
+      "x": 209,
+      "y": 191,
+      "w": 42,
+      "h": 39,
+      "hsv_median": [
+        15.0,
+        147.0,
+        133.0
+      ],
+      "value": null
+    },
+    {
+      "cell_idx": 24,
+      "row_idx": 3,
+      "group_idx": 1,
+      "parameter": "H2O2",
+      "is_color_cell": false,
+      "x": 281,
+      "y": 191,
+      "w": 81,
+      "h": 39,
+      "hsv_median": [
+        12.0,
+        45.0,
+        123.0
+      ],
+      "value": 30.0
+    },
+    {
+      "cell_idx": 25,
+      "row_idx": 3,
+      "group_idx": 1,
+      "parameter": "H2O2",
+      "is_color_cell": true,
+      "x": 393,
+      "y": 191,
+      "w": 43,
+      "h": 39,
+      "hsv_median": [
+        16.0,
+        128.0,
+        135.0
+      ],
+      "value": null
+    },
+    {
+      "cell_idx": 26,
+      "row_idx": 3,
+      "group_idx": 2,
+      "parameter": "PHMB",
+      "is_color_cell": true,
+      "x": 441,
+      "y": 191,
+      "w": 72,
+      "h": 39,
+      "hsv_median": [
+        95.0,
+        57.0,
+        91.0
+      ],
+      "value": null
+    },
+    {
+      "cell_idx": 27,
+      "row_idx": 3,
+      "group_idx": 2,
+      "parameter": "PHMB",
+      "is_color_cell": false,
+      "x": 539,
+      "y": 191,
+      "w": 89,
+      "h": 39,
+      "hsv_median": [
+        13.0,
+        29.0,
+        148.0
+      ],
+      "value": 50.0
+    },
+    {
+      "cell_idx": 28,
+      "row_idx": 4,
+      "group_idx": 0,
+      "parameter": "pH",
+      "is_color_cell": false,
+      "x": 19,
+      "y": 237,
+      "w": 87,
+      "h": 41,
+      "hsv_median": [
+        9.0,
+        52.0,
+        138.0
+      ],
+      "value": 7.4
+    },
+    {
+      "cell_idx": 29,
+      "row_idx": 4,
+      "group_idx": 0,
+      "parameter": "pH",
+      "is_color_cell": true,
+      "x": 129,
+      "y": 237,
+      "w": 71,
+      "h": 41,
+      "hsv_median": [
+        6.0,
+        147.0,
+        143.0
+      ],
+      "value": null
+    },
+    {
+      "cell_idx": 30,
+      "row_idx": 4,
+      "group_idx": 1,
+      "parameter": "H2O2",
+      "is_color_cell": true,
+      "x": 209,
+      "y": 237,
+      "w": 42,
+      "h": 41,
+      "hsv_median": [
+        16.0,
+        131.0,
+        132.0
+      ],
+      "value": null
+    },
+    {
+      "cell_idx": 31,
+      "row_idx": 4,
+      "group_idx": 1,
+      "parameter": "H2O2",
+      "is_color_cell": false,
+      "x": 281,
+      "y": 237,
+      "w": 81,
+      "h": 41,
+      "hsv_median": [
+        12.0,
+        47.0,
+        121.0
+      ],
+      "value": 20.0
+    },
+    {
+      "cell_idx": 32,
+      "row_idx": 4,
+      "group_idx": 1,
+      "parameter": "H2O2",
+      "is_color_cell": true,
+      "x": 393,
+      "y": 237,
+      "w": 43,
+      "h": 41,
+      "hsv_median": [
+        18.0,
+        106.0,
+        135.0
+      ],
+      "value": null
+    },
+    {
+      "cell_idx": 33,
+      "row_idx": 4,
+      "group_idx": 2,
+      "parameter": "PHMB",
+      "is_color_cell": true,
+      "x": 441,
+      "y": 237,
+      "w": 72,
+      "h": 41,
+      "hsv_median": [
+        51.0,
+        19.0,
+        85.0
+      ],
+      "value": null
+    },
+    {
+      "cell_idx": 34,
+      "row_idx": 4,
+      "group_idx": 2,
+      "parameter": "PHMB",
+      "is_color_cell": false,
+      "x": 539,
+      "y": 237,
+      "w": 89,
+      "h": 41,
+      "hsv_median": [
+        13.0,
+        30.0,
+        143.0
+      ],
+      "value": 40.0
+    },
+    {
+      "cell_idx": 35,
+      "row_idx": 5,
+      "group_idx": 0,
+      "parameter": "pH",
+      "is_color_cell": false,
+      "x": 19,
+      "y": 290,
+      "w": 87,
+      "h": 40,
+      "hsv_median": [
+        10.0,
+        55.0,
+        142.0
+      ],
+      "value": 7.2
+    },
+    {
+      "cell_idx": 36,
+      "row_idx": 5,
+      "group_idx": 0,
+      "parameter": "pH",
+      "is_color_cell": true,
+      "x": 129,
+      "y": 290,
+      "w": 71,
+      "h": 40,
+      "hsv_median": [
+        8.0,
+        149.0,
+        144.0
+      ],
+      "value": null
+    },
+    {
+      "cell_idx": 37,
+      "row_idx": 5,
+      "group_idx": 1,
+      "parameter": "H2O2",
+      "is_color_cell": true,
+      "x": 209,
+      "y": 290,
+      "w": 42,
+      "h": 40,
+      "hsv_median": [
+        18.0,
+        122.0,
+        132.0
+      ],
+      "value": null
+    },
+    {
+      "cell_idx": 38,
+      "row_idx": 5,
+      "group_idx": 1,
+      "parameter": "H2O2",
+      "is_color_cell": false,
+      "x": 281,
+      "y": 290,
+      "w": 81,
+      "h": 40,
+      "hsv_median": [
+        13.0,
+        46.0,
+        119.0
+      ],
+      "value": 15.0
+    },
+    {
+      "cell_idx": 39,
+      "row_idx": 5,
+      "group_idx": 1,
+      "parameter": "H2O2",
+      "is_color_cell": true,
+      "x": 393,
+      "y": 290,
+      "w": 43,
+      "h": 40,
+      "hsv_median": [
+        20.0,
+        104.0,
+        129.0
+      ],
+      "value": null
+    },
+    {
+      "cell_idx": 40,
+      "row_idx": 5,
+      "group_idx": 2,
+      "parameter": "PHMB",
+      "is_color_cell": true,
+      "x": 441,
+      "y": 290,
+      "w": 72,
+      "h": 40,
+      "hsv_median": [
+        43.0,
+        35.0,
+        96.0
+      ],
+      "value": null
+    },
+    {
+      "cell_idx": 41,
+      "row_idx": 5,
+      "group_idx": 2,
+      "parameter": "PHMB",
+      "is_color_cell": false,
+      "x": 539,
+      "y": 290,
+      "w": 89,
+      "h": 40,
+      "hsv_median": [
+        14.0,
+        31.0,
+        140.0
+      ],
+      "value": 30.0
+    },
+    {
+      "cell_idx": 42,
+      "row_idx": 6,
+      "group_idx": 0,
+      "parameter": "pH",
+      "is_color_cell": false,
+      "x": 19,
+      "y": 339,
+      "w": 87,
+      "h": 39,
+      "hsv_median": [
+        11.0,
+        56.0,
+        145.0
+      ],
+      "value": 7.0
+    },
+    {
+      "cell_idx": 43,
+      "row_idx": 6,
+      "group_idx": 0,
+      "parameter": "pH",
+      "is_color_cell": true,
+      "x": 129,
+      "y": 339,
+      "w": 71,
+      "h": 39,
+      "hsv_median": [
+        11.0,
+        151.0,
+        148.0
+      ],
+      "value": null
+    },
+    {
+      "cell_idx": 44,
+      "row_idx": 6,
+      "group_idx": 1,
+      "parameter": "H2O2",
+      "is_color_cell": true,
+      "x": 209,
+      "y": 339,
+      "w": 42,
+      "h": 39,
+      "hsv_median": [
+        19.0,
+        105.0,
+        132.0
+      ],
+      "value": null
+    },
+    {
+      "cell_idx": 45,
+      "row_idx": 6,
+      "group_idx": 1,
+      "parameter": "H2O2",
+      "is_color_cell": false,
+      "x": 281,
+      "y": 339,
+      "w": 81,
+      "h": 39,
+      "hsv_median": [
+        13.0,
+        48.0,
+        120.0
+      ],
+      "value": 10.0
+    },
+    {
+      "cell_idx": 46,
+      "row_idx": 6,
+      "group_idx": 1,
+      "parameter": "H2O2",
+      "is_color_cell": true,
+      "x": 393,
+      "y": 339,
+      "w": 43,
+      "h": 39,
+      "hsv_median": [
+        21.0,
+        95.0,
+        133.0
+      ],
+      "value": null
+    },
+    {
+      "cell_idx": 47,
+      "row_idx": 6,
+      "group_idx": 2,
+      "parameter": "PHMB",
+      "is_color_cell": true,
+      "x": 441,
+      "y": 339,
+      "w": 72,
+      "h": 39,
+      "hsv_median": [
+        27.0,
+        55.0,
+        106.0
+      ],
+      "value": null
+    },
+    {
+      "cell_idx": 48,
+      "row_idx": 6,
+      "group_idx": 2,
+      "parameter": "PHMB",
+      "is_color_cell": false,
+      "x": 539,
+      "y": 339,
+      "w": 89,
+      "h": 39,
+      "hsv_median": [
+        14.0,
+        33.0,
+        136.0
+      ],
+      "value": 20.0
+    },
+    {
+      "cell_idx": 49,
+      "row_idx": 7,
+      "group_idx": 0,
+      "parameter": "pH",
+      "is_color_cell": false,
+      "x": 19,
+      "y": 382,
+      "w": 87,
+      "h": 42,
+      "hsv_median": [
+        11.0,
+        60.0,
+        144.0
+      ],
+      "value": 6.8
+    },
+    {
+      "cell_idx": 50,
+      "row_idx": 7,
+      "group_idx": 0,
+      "parameter": "pH",
+      "is_color_cell": true,
+      "x": 129,
+      "y": 382,
+      "w": 71,
+      "h": 42,
+      "hsv_median": [
+        14.0,
+        150.0,
+        152.0
+      ],
+      "value": null
+    },
+    {
+      "cell_idx": 51,
+      "row_idx": 7,
+      "group_idx": 1,
+      "parameter": "H2O2",
+      "is_color_cell": true,
+      "x": 209,
+      "y": 382,
+      "w": 42,
+      "h": 42,
+      "hsv_median": [
+        17.0,
+        81.0,
+        135.0
+      ],
+      "value": null
+    },
+    {
+      "cell_idx": 52,
+      "row_idx": 7,
+      "group_idx": 1,
+      "parameter": "H2O2",
+      "is_color_cell": false,
+      "x": 281,
+      "y": 382,
+      "w": 81,
+      "h": 42,
+      "hsv_median": [
+        13.0,
+        47.0,
+        128.0
+      ],
+      "value": 5.0
+    },
+    {
+      "cell_idx": 53,
+      "row_idx": 7,
+      "group_idx": 1,
+      "parameter": "H2O2",
+      "is_color_cell": true,
+      "x": 393,
+      "y": 382,
+      "w": 43,
+      "h": 42,
+      "hsv_median": [
+        20.0,
+        79.0,
+        139.0
+      ],
+      "value": null
+    },
+    {
+      "cell_idx": 54,
+      "row_idx": 7,
+      "group_idx": 2,
+      "parameter": "PHMB",
+      "is_color_cell": true,
+      "x": 441,
+      "y": 382,
+      "w": 72,
+      "h": 42,
+      "hsv_median": [
+        23.0,
+        84.0,
+        112.0
+      ],
+      "value": null
+    },
+    {
+      "cell_idx": 55,
+      "row_idx": 7,
+      "group_idx": 2,
+      "parameter": "PHMB",
+      "is_color_cell": false,
+      "x": 539,
+      "y": 382,
+      "w": 89,
+      "h": 42,
+      "hsv_median": [
+        15.0,
+        34.0,
+        137.0
+      ],
+      "value": 10.0
+    }
+  ]
+}

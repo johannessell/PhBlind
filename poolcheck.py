@@ -112,6 +112,8 @@ def correct_param(text):
 
 def parse_ocr_result(result):
     blocks = []
+    if result is None:
+        return blocks
     for item in result:
         json_str = item.split('\t')[-1].strip()
         try:
@@ -196,32 +198,91 @@ def build_reference(image: np.ndarray, ref_path: str) -> dict:
     y_max = min(max(r[1]+r[3] for r in rects) + margin, image.shape[0])
     cropped = image[y_min:y_max, x_min:x_max].copy()
 
-    # Grid im Crop
-    gray_c = cv2.bilateralFilter(cv2.cvtColor(cropped, cv2.COLOR_BGR2GRAY), 5, 200, 200)
-    gray_c_enh = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8,8)).apply(gray_c)
-    canny_c = cv2.Canny(gray_c_enh, 30, 120)
-    contours_c, _ = cv2.findContours(canny_c, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    # Grid im Crop – per Hough-Linien robuster als Konturerkennung
+    gray_c     = cv2.cvtColor(cropped, cv2.COLOR_BGR2GRAY)
+    gray_c_enh = cv2.createCLAHE(clipLimit=3.0, tileGridSize=(8,8)).apply(gray_c)
+    canny_c    = cv2.Canny(gray_c_enh, 20, 80)
 
-    rects_cropped = []
-    for cnt in contours_c:
-        if cv2.contourArea(cnt) < 500:
-            continue
-        approx = cv2.approxPolyDP(cnt, 0.02 * cv2.arcLength(cnt, True), True)
-        if len(approx) == 4 and cv2.isContourConvex(approx):
-            x, y, w, h = cv2.boundingRect(approx)
-            rects_cropped.append((x, y, w, h))
+    # Horizontale + vertikale Linien per HoughLinesP
+    lines = cv2.HoughLinesP(canny_c, 1, np.pi/180, threshold=60,
+                            minLineLength=cropped.shape[1]//6,
+                            maxLineGap=20)
 
-    rows    = group_rects_by_axis(rects_cropped, axis=1, tol=20)
-    columns = group_columns(rects_cropped, tol=20)
-    col_positions = [min(r[0] for r in col) for col in columns]
-    col_widths    = [max(r[2] for r in col) for col in columns]
-    row_positions = [min(r[1] for r in row) for row in rows]
-    row_heights   = [max(r[3] for r in row) for row in rows]
+    h_lines, v_lines = [], []
+    if lines is not None:
+        for l in lines:
+            x1, y1, x2, y2 = l[0]
+            angle = abs(np.degrees(np.arctan2(y2-y1, x2-x1)))
+            if angle < 15:          # horizontal
+                h_lines.append((y1+y2)//2)
+            elif angle > 75:        # vertikal
+                v_lines.append((x1+x2)//2)
+
+    def cluster(vals, tol=15):
+        """Gruppiert ähnliche Werte → Median pro Gruppe."""
+        if not vals:
+            return []
+        vals = sorted(vals)
+        groups, cur = [], [vals[0]]
+        for v in vals[1:]:
+            if v - cur[-1] < tol:
+                cur.append(v)
+            else:
+                groups.append(cur)
+                cur = [v]
+        groups.append(cur)
+        return [int(np.median(g)) for g in groups]
+
+    col_positions = cluster(v_lines, tol=40)
+    row_positions = cluster(h_lines, tol=30)
+
+    print(f"  Hough-Linien: {len(h_lines)} horizontal, {len(v_lines)} vertikal")
+    print(f"  Spalten-Positionen: {col_positions}")
+    print(f"  Zeilen-Positionen:  {row_positions}")
+
+    # Fallback auf Konturerkennung wenn Hough zu wenig findet
+    if len(col_positions) < 3 or len(row_positions) < 3:
+        print("  Hough unzureichend → Fallback auf Konturen")
+        contours_c, _ = cv2.findContours(canny_c, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        rects_cropped = []
+        for cnt in contours_c:
+            if cv2.contourArea(cnt) < 200:
+                continue
+            approx = cv2.approxPolyDP(cnt, 0.02 * cv2.arcLength(cnt, True), True)
+            if len(approx) == 4 and cv2.isContourConvex(approx):
+                x, y, w, h = cv2.boundingRect(approx)
+                if 0.3 < w/float(h) < 5.0:
+                    rects_cropped.append((x, y, w, h))
+        rows    = group_rects_by_axis(rects_cropped, axis=1, tol=20)
+        columns = group_columns(rects_cropped, tol=20)
+        col_positions = [min(r[0] for r in col) for col in columns]
+        row_positions = [min(r[1] for r in row) for row in rows]
+        col_widths    = [max(r[2] for r in col) for col in columns]
+        row_heights   = [max(r[3] for r in row) for row in rows]
+    else:
+        # Zellengrößen aus Abständen ableiten
+        col_positions = sorted(col_positions)
+        row_positions = sorted(row_positions)
+        col_widths  = [col_positions[i+1] - col_positions[i] - 2
+                       for i in range(len(col_positions)-1)] + [60]
+        row_heights = [row_positions[i+1] - row_positions[i] - 2
+                       for i in range(len(row_positions)-1)] + [40]
+
+    print(f"  Crop-Größe: {cropped.shape[1]}x{cropped.shape[0]}px")
+    print(f"  Spalten: {len(col_positions)}  Zeilen: {len(row_positions)}")
+
+    # Dummy columns-Liste für classify_and_group_columns (braucht Rect-Listen pro Spalte)
+    columns = [[(cx, row_positions[0], cw, row_heights[0])] for cx, cw in zip(col_positions, col_widths)]
 
     rects_grid = []
     for ry, rh in zip(row_positions, row_heights):
         for cx, cw in zip(col_positions, col_widths):
             rects_grid.append((cx, ry, cw, rh))
+
+    # grid_top = y-Position der ersten Datenzeile (nicht der Kopfzeile)
+    # Kopfbereich = alles oberhalb der zweiten Zeile (erste Zeile = "Phenol Red / mg/l")
+    grid_top = row_positions[1] if len(row_positions) > 1 else row_positions[0]
+    print(f"  grid_top: {grid_top}px")
 
     # Spaltenklassifikation
     hsv = cv2.cvtColor(cropped, cv2.COLOR_BGR2HSV)
@@ -464,7 +525,7 @@ def draw_searching(frame, n_matches, progress, required, roi_rect=None, status='
 def capture_reference_photo(cap, scale):
     """
     Zeigt Kamerabild an und wartet auf Leertaste zum Aufnehmen.
-    Gibt das aufgenommene Bild zurück.
+    Gibt das aufgenommene Bild in ORIGINAL-Auflösung zurück.
     """
     print("Kein Referenzbild vorhanden.")
     print("  → Messindikator vor die Kamera halten und LEERTASTE drücken.")
@@ -472,16 +533,16 @@ def capture_reference_photo(cap, scale):
         ret, frame = cap.read()
         if not ret:
             break
-        if scale != 1.0:
-            frame = cv2.resize(frame, None, fx=scale, fy=scale)
-        vis = frame.copy()
-        cv2.rectangle(vis, (10, 10), (500, 50), (0, 0, 0), -1)
-        cv2.putText(vis, "Referenz aufnehmen: LEERTASTE druecken",
+        # Anzeige skaliert, aber Original behalten
+        display = cv2.resize(frame, None, fx=scale, fy=scale) if scale != 1.0 else frame.copy()
+        cv2.rectangle(display, (10, 10), (500, 50), (0, 0, 0), -1)
+        cv2.putText(display, "Referenz aufnehmen: LEERTASTE druecken",
                     (18, 36), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 220, 255), 2)
-        cv2.imshow('Pool Check', vis)
+        cv2.imshow('Pool Check', display)
         key = cv2.waitKey(30) & 0xFF
         if key == ord(' '):
-            return frame
+            print(f"  Foto aufgenommen: {frame.shape[1]}x{frame.shape[0]}px (Original)")
+            return frame  # Original-Auflösung für OCR
         if key == ord('q'):
             return None
 
@@ -589,10 +650,11 @@ def live_measure(cap, ref, scale, stable_frames):
 # ══════════════════════════════════════════════════════════
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--reference', default='reference2.json')
-parser.add_argument('--camera',    type=int,   default=1)
+parser.add_argument('--reference', default='reference.json')
+parser.add_argument('--camera',    type=int,   default=0)
 parser.add_argument('--scale',     type=float, default=0.5)
 parser.add_argument('--stable',    type=int,   default=5)
+parser.add_argument('--image',     default=None, help='Bild statt Kamera für Referenz verwenden (z.B. reference2.jpg)')
 args = parser.parse_args()
 
 cap = cv2.VideoCapture(args.camera)
@@ -605,6 +667,13 @@ if os.path.exists(args.reference):
     with open(args.reference, 'r', encoding='utf-8') as f:
         ref = json.load(f)
     print(f"Parameter: {[p['name'] for p in ref['parameters']]}")
+elif args.image is not None:
+    # Bild direkt aus Datei laden
+    photo = cv2.imread(args.image)
+    if photo is None:
+        raise FileNotFoundError(f"Bild nicht gefunden: {args.image}")
+    print(f"Verwende Bild: {args.image} ({photo.shape[1]}x{photo.shape[0]}px)")
+    ref = build_reference(photo, args.reference)
 else:
     photo = capture_reference_photo(cap, args.scale)
     if photo is None:

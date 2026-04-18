@@ -6,7 +6,10 @@
   <component name="ChangeListManager">
     <list default="true" id="40b0e958-e1fe-4e84-bd8b-7a1339b25bfb" name="Changes" comment="git remote add origin git@github.com:johannessell/PhBlind.git&#10;git branch -M main&#10;git push -u origin main">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/main_bounding_orb.py" beforeDir="false" afterPath="$PROJECT_DIR$/main_bounding_orb.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/e2e_results/system_results.txt" beforeDir="false" afterPath="$PROJECT_DIR$/e2e_results/system_results.txt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/poolcheck.py" beforeDir="false" afterPath="$PROJECT_DIR$/poolcheck.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/tmp.jpg" beforeDir="false" afterPath="$PROJECT_DIR$/tmp.jpg" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/tmp_roi.jpg" beforeDir="false" afterPath="$PROJECT_DIR$/tmp_roi.jpg" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -59,6 +62,7 @@
     "Python.contour_detection.executor": "Run",
     "Python.contour_detection02.executor": "Run",
     "Python.contour_detection03.executor": "Run",
+    "Python.detect_grid.executor": "Run",
     "Python.infos_from_roi.executor": "Run",
     "Python.keypoints.executor": "Run",
     "Python.main.executor": "Run",
@@ -196,7 +200,15 @@
       <option name="project" value="LOCAL" />
       <updated>1772999709524</updated>
     </task>
-    <option name="localTasksCounter" value="9" />
+    <task id="LOCAL-00009" summary="git remote add origin git@github.com:johannessell/PhBlind.git&#10;git branch -M main&#10;git push -u origin main">
+      <option name="closed" value="true" />
+      <created>1776280889214</created>
+      <option name="number" value="00009" />
+      <option name="presentableId" value="LOCAL-00009" />
+      <option name="project" value="LOCAL" />
+      <updated>1776280889214</updated>
+    </task>
+    <option name="localTasksCounter" value="10" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">

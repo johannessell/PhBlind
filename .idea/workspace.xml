@@ -5,11 +5,12 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="40b0e958-e1fe-4e84-bd8b-7a1339b25bfb" name="Changes" comment="git remote add origin git@github.com:johannessell/PhBlind.git&#10;git branch -M main&#10;git push -u origin main">
+      <change afterPath="$PROJECT_DIR$/poolcheck.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/reference2.jpg" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/reference4.jpg" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/contour_detection03.py" beforeDir="false" afterPath="$PROJECT_DIR$/contour_detection03.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/e2e_results/system_results.txt" beforeDir="false" afterPath="$PROJECT_DIR$/e2e_results/system_results.txt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/main_bounding_02.py" beforeDir="false" afterPath="$PROJECT_DIR$/main_bounding_02.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/main_bounding_orb.py" beforeDir="false" afterPath="$PROJECT_DIR$/main_bounding_orb.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/tmp.jpg" beforeDir="false" afterPath="$PROJECT_DIR$/tmp.jpg" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
@@ -25,6 +26,11 @@
     </option>
   </component>
   <component name="Git.Settings">
+    <option name="RECENT_BRANCH_BY_REPOSITORY">
+      <map>
+        <entry key="$PROJECT_DIR$" value="master" />
+      </map>
+    </option>
     <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$" />
   </component>
   <component name="GitHubPullRequestSearchHistory">{
@@ -76,7 +82,7 @@
     &quot;RunOnceActivity.ShowReadmeOnStart&quot;: &quot;true&quot;,
     &quot;RunOnceActivity.TerminalTabsStorage.copyFrom.TerminalArrangementManager.252&quot;: &quot;true&quot;,
     &quot;RunOnceActivity.git.unshallow&quot;: &quot;true&quot;,
-    &quot;git-widget-placeholder&quot;: &quot;master&quot;,
+    &quot;git-widget-placeholder&quot;: &quot;ac221db1&quot;,
     &quot;last_opened_file_path&quot;: &quot;C:/Users/johan/PycharmProjects/PhBlind&quot;,
     &quot;node.js.detected.package.eslint&quot;: &quot;true&quot;,
     &quot;node.js.detected.package.tslint&quot;: &quot;true&quot;,
@@ -257,11 +263,6 @@
           <url>file://$PROJECT_DIR$/ocr_example.py</url>
           <line>5</line>
           <option name="timeStamp" value="7" />
-        </line-breakpoint>
-        <line-breakpoint enabled="true" suspend="THREAD" type="python-line">
-          <url>file://$PROJECT_DIR$/main_bounding_orb.py</url>
-          <line>17</line>
-          <option name="timeStamp" value="8" />
         </line-breakpoint>
       </breakpoints>
     </breakpoint-manager>

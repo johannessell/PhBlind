@@ -6,7 +6,36 @@ from openocr import OpenOCR
 # -------------------------------
 # 1. Bild laden
 # -------------------------------
-image = cv2.imread('template02.jpg')
+image = cv2.imread('reference2.jpg')
+
+def capture_reference_photo(cap, scale):
+    """
+    Zeigt Kamerabild an und wartet auf Leertaste zum Aufnehmen.
+    Gibt das aufgenommene Bild in ORIGINAL-Auflösung zurück.
+    """
+    print("Kein Referenzbild vorhanden.")
+    print("  → Messindikator vor die Kamera halten und LEERTASTE drücken.")
+    while True:
+        ret, frame = cap.read()
+        if not ret:
+            break
+        # Anzeige skaliert, aber Original behalten
+        display = cv2.resize(frame, None, fx=scale, fy=scale) if scale != 1.0 else frame.copy()
+        cv2.rectangle(display, (10, 10), (500, 50), (0, 0, 0), -1)
+        cv2.putText(display, "Referenz aufnehmen: LEERTASTE druecken",
+                    (18, 36), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 220, 255), 2)
+        cv2.imshow('Pool Check', display)
+        key = cv2.waitKey(30) & 0xFF
+        if key == ord(' '):
+            print(f"  Foto aufgenommen: {frame.shape[1]}x{frame.shape[0]}px (Original)")
+            return frame  # Original-Auflösung für OCR
+        if key == ord('q'):
+            return None
+
+cap = cv2.VideoCapture(1)
+
+photo = capture_reference_photo(cap, 1)
+
 if image is None:
     raise Exception("Bild konnte nicht geladen werden!")
 

@@ -75,6 +75,10 @@ for cnt in contours:
             cv2.drawContours(original_with_contours, [approx], -1, (0,255,0), 2)
             rects.append((x, y, w, h))
 
+print(f"Gefundene Rechtecke: {len(rects)}")
+for i, r in enumerate(rects):
+    print(f"  Rechteck {i}: x={r[0]}, y={r[1]}, w={r[2]}, h={r[3]}")
+
 # -------------------------------
 # 3. Gemeinsames blaues Rechteck
 # -------------------------------
@@ -98,7 +102,7 @@ gray_cropped = cv2.cvtColor(cropped_image, cv2.COLOR_BGR2GRAY)
 gray_cropped = cv2.bilateralFilter(gray_cropped, 5, 200, 200)
 clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8,8))
 gray_cropped_enhanced = clahe.apply(gray_cropped)
-canny_cropped = cv2.Canny(gray_cropped_enhanced, 30, 120)
+canny_cropped = cv2.Canny(gray_cropped_enhanced, 20, 80)  # Niedrigere Schwellen für mehr Konturen
 contours_cropped, _ = cv2.findContours(canny_cropped, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
 # -------------------------------
@@ -107,7 +111,7 @@ contours_cropped, _ = cv2.findContours(canny_cropped, cv2.RETR_EXTERNAL, cv2.CHA
 wrapped = np.zeros_like(cropped_image)  # schwarzes Image
 rects_cropped = []
 for cnt in contours_cropped:
-    if cv2.contourArea(cnt) < 500:
+    if cv2.contourArea(cnt) < 300:  # Reduzierte Schwelle für mehr Konturen
         continue
     epsilon = 0.02 * cv2.arcLength(cnt, True)
     approx = cv2.approxPolyDP(cnt, epsilon, True)
@@ -135,7 +139,7 @@ def group_rects_by_axis(rects, axis=1, tol=20):
             groups.append([r])
     return groups
 
-def group_columns(rects, tol=20):
+def group_columns(rects, tol=3):  # Noch niedrigere Toleranz
     rects_sorted = sorted(rects, key=lambda r: r[0])  # sortiere nach x
     columns = []
     for r in rects_sorted:
@@ -149,19 +153,16 @@ def group_columns(rects, tol=20):
             columns.append([r])
     return columns
 
-def classify_and_group_columns(columns, hsv_image, hue_iqr_threshold=10.0):
+def classify_and_group_columns(columns, hsv_image, max_group_distance=150):
     """
-    Klassifiziert Spalten anhand der Hue-Varianz:
-      'color'   : hohe Hue-Varianz -> Farbspalte (je Zeile andere Referenzfarbe)
-      'measure' : niedrige Hue-Varianz -> Messspalte (transparente Probe,
-                  konstanter Hintergrund; enthält auch Beschriftungstext)
-
-    Gruppierung: measure-Spalte zieht direkt benachbarte color-Spalten zu sich.
-    Eine Gruppe = ein Parameter (z.B. pH oder Chlor).
+    Neue Gruppierungslogik basierend auf räumlicher Nähe:
+      - Spalten werden zu Gruppen zusammengefasst, wenn sie benachbart sind
+      - Jede Gruppe enthält eine Measure-Spalte und ihre benachbarten Color-Spalten
+      - Hue-Ähnlichkeit wird als Validierung verwendet
 
     Returns:
         col_types : dict {col_idx: 'color'|'measure'}
-        col_stats : dict {col_idx: {'sat': float, 'hue_iqr': float}}
+        col_stats : dict {col_idx: {'hue_median': float, 'sat_median': float, 'hue_iqr': float}}
         groups    : list of {'cols': [col_idx,...], 'measure_col': col_idx}
     """
     col_stats = {}
@@ -173,45 +174,92 @@ def classify_and_group_columns(columns, hsv_image, hue_iqr_threshold=10.0):
                 hue_vals.extend(roi[:, :, 0].flatten().tolist())
                 sat_vals.extend(roi[:, :, 1].flatten().tolist())
         col_stats[i] = {
-            'sat':     float(np.median(sat_vals)) if sat_vals else 0.0,
+            'hue_median': float(np.median(hue_vals)) if hue_vals else 0.0,
+            'sat_median': float(np.median(sat_vals)) if sat_vals else 0.0,
             'hue_iqr': float(np.percentile(hue_vals, 75) - np.percentile(hue_vals, 25))
                        if len(hue_vals) >= 4 else 0.0,
         }
 
-    # Fixer Threshold: hue_iqr >= hue_iqr_threshold = color, sonst = measure
+    # Schritt 1: Measure-Spalten identifizieren (nur transparente Spalten = niedrige Sättigung)
     col_types = {}
+    measure_cols = []
+    color_cols = []
+
     for i, s in col_stats.items():
-        if s['sat'] < 30.0:
+        if s['sat_median'] < 60.0:  # Zurück zu 60.0
             col_types[i] = 'measure'
-        elif s['hue_iqr'] >= hue_iqr_threshold:
-            col_types[i] = 'color'
+            measure_cols.append(i)
         else:
-            col_types[i] = 'measure'
+            col_types[i] = 'color'
+            color_cols.append(i)
 
-    # Phase 1: alle measure-Spalten verarbeiten + direkte color-Nachbarn zuordnen
-    n = len(columns)
-    used = set()
+    # Schritt 2: Gruppen bilden basierend auf räumlicher Nähe
+    # Jede Gruppe muss mindestens eine measure- und eine color-Spalte haben
     groups = []
+    used_cols = set()
 
-    for i in range(n):
-        if col_types[i] != 'measure':
+    # Berechne x-Positionen der Spalten
+    col_positions = []
+    for i, col_rects in enumerate(columns):
+        x_pos = min(r[0] for r in col_rects)
+        col_positions.append(x_pos)
+
+    for measure_idx in sorted(measure_cols):
+        if measure_idx in used_cols:
             continue
-        grp = []
-        if i > 0 and col_types.get(i-1) == 'color' and (i-1) not in used:
-            grp.append(i-1); used.add(i-1)
-        grp.append(i); used.add(i)
-        if i < n-1 and col_types.get(i+1) == 'color' and (i+1) not in used:
-            grp.append(i+1); used.add(i+1)
-        groups.append({'cols': sorted(grp), 'measure_col': i})
 
-    # Phase 2: übrige color-Spalten ohne measure-Nachbar als eigene Gruppe
-    for i in range(n):
-        if i not in used and col_types[i] == 'color':
-            groups.append({'cols': [i], 'measure_col': None})
-            used.add(i)
+        group_cols = [measure_idx]
+        used_cols.add(measure_idx)
+        measure_x = col_positions[measure_idx]
+
+        # Sammle benachbarte Spalten (links und rechts)
+        nearby_color_cols = []
+        for col_idx in range(len(columns)):
+            if col_idx in used_cols:
+                continue
+
+            col_x = col_positions[col_idx]
+            distance = abs(col_x - measure_x)
+            if distance <= max_group_distance and col_types[col_idx] == 'color':
+                nearby_color_cols.append(col_idx)
+                group_cols.append(col_idx)
+                used_cols.add(col_idx)
+
+        # Gruppe nur bilden, wenn mindestens eine color-Spalte vorhanden ist
+        if nearby_color_cols:
+            # Sortiere die Gruppe nach x-Position
+            group_cols.sort(key=lambda idx: col_positions[idx])
+
+            groups.append({
+                'cols': group_cols,
+                'measure_col': measure_idx
+            })
+        else:
+            # Wenn keine color-Spalten gefunden, measure-Spalte wieder freigeben
+            used_cols.remove(measure_idx)
+
+    # Schritt 3: Verbleibende Spalten ohne vollständige Gruppe werden als separate Gruppen behandelt,
+    # auch wenn sie keine color-Spalten haben (für den Fall, dass alle Spalten measure sind)
+    for col_idx in range(len(columns)):
+        if col_idx not in used_cols:
+            # Finde benachbarte measure-Spalten
+            group_cols = [col_idx]
+            used_cols.add(col_idx)
+            col_x = col_positions[col_idx]
+            for other_idx in range(len(columns)):
+                if other_idx not in used_cols and col_types[other_idx] == 'measure':
+                    other_x = col_positions[other_idx]
+                    if abs(other_x - col_x) <= max_group_distance:
+                        group_cols.append(other_idx)
+                        used_cols.add(other_idx)
+            group_cols.sort(key=lambda idx: col_positions[idx])
+            groups.append({
+                'cols': group_cols,
+                'measure_col': min(group_cols) if col_types[min(group_cols)] == 'measure' else None
+            })
 
     # Nach x-Position sortieren
-    groups.sort(key=lambda g: g['cols'][0])
+    groups.sort(key=lambda g: col_positions[g['cols'][0]])
 
     return col_types, col_stats, groups
 
@@ -249,14 +297,18 @@ if rects_cropped:
 hsv_for_classify = cv2.cvtColor(cropped_image, cv2.COLOR_BGR2HSV)
 col_types, col_stats, col_groups = classify_and_group_columns(
     columns, hsv_for_classify,
-    hue_iqr_threshold=5.0,
+    max_group_distance=130,  # Passende Distanz für die erwarteten Gruppen
 )
 
 # Ausgabe
+print("\n--- Spalten-Positionen ---")
+col_positions = [min(r[0] for r in col) for col in columns]
+for i, pos in enumerate(col_positions):
+    print(f"  Spalte {i}: x={pos}")
 print("\n--- Spalten-Klassifikation ---")
 for i in range(len(columns)):
     s = col_stats[i]
-    print(f"  Spalte {i:2d}: {col_types[i]:8s}  sat={s['sat']:.1f}  hue_iqr={s['hue_iqr']:.1f}")
+    print(f"  Spalte {i:2d}: {col_types[i]:8s}  hue={s['hue_median']:.1f}  sat={s['sat_median']:.1f}  hue_iqr={s['hue_iqr']:.1f}")
 print("\n--- Spaltengruppen ---")
 for g in col_groups:
     print(f"  cols={g['cols']}  measure_col={g['measure_col']}")
@@ -307,10 +359,10 @@ for g_idx, g in enumerate(col_groups):
     color_cols = [c for c in g['cols'] if col_types[c] == 'color']
     if len(color_cols) < 2:
         continue
-    checks = crosscheck_color_columns(g, columns, hsv_for_classify, rows)
+    checks = crosscheck_color_columns(g, columns, hsv_for_classify, rows, hue_diff_threshold=30.0)
     warnings = [c for c in checks if not c[3]]
-    status = "✅ OK" if not warnings else f"⚠️  {len(warnings)} Zeilen abweichend"
-    print(f"  Gruppe {g_idx} cols={g['cols']}  → {status}")
+    status = "OK" if not warnings else f"{len(warnings)} Zeilen abweichend"
+    print(f"  Gruppe {g_idx} cols={g['cols']}  -> {status}")
     for (row_idx, hues, max_diff, ok) in checks:
         marker = "  " if ok else "⚠️"
         hue_str = "  ".join(f"Sp{c}:{v:.0f}" for c, v in hues.items())
@@ -654,15 +706,18 @@ plt.figure(figsize=(15,6))
 plt.subplot(1,3,1)
 plt.title("Original + Konturen")
 plt.imshow(cv2.cvtColor(original_with_contours, cv2.COLOR_BGR2RGB))
+plt.savefig('debug_original.png')
 
 plt.subplot(1,3,2)
 plt.title("Cropped + Gefüllte Rechtecke")
 plt.imshow(cv2.cvtColor(wrapped, cv2.COLOR_BGR2RGB))
+plt.savefig('debug_cropped.png')
 
 plt.subplot(1,3,3)
 plt.title("Overlay + Grid + Hue")
 plt.imshow(cv2.cvtColor(overlay_marked, cv2.COLOR_BGR2RGB))
-plt.show()
+plt.savefig('debug_overlay.png')
+# plt.show()
 
 # Spaltengruppen separat anzeigen
 plt.figure(figsize=(10, 6))
@@ -670,4 +725,13 @@ plt.title("Spaltengruppen  (C=Color  M=Measure  |  gleiche Farbe = eine Gruppe)"
 plt.imshow(cv2.cvtColor(cropped_with_groups, cv2.COLOR_BGR2RGB))
 plt.axis('off')
 plt.tight_layout()
+plt.savefig('debug_groups.png')
 plt.show()
+
+# OpenCV Fenster anzeigen
+cv2.imshow('Original + Konturen', original_with_contours)
+cv2.imshow('Cropped + Gefüllte Rechtecke', wrapped)
+cv2.imshow('Overlay + Grid + Hue', overlay_marked)
+cv2.imshow('Spaltengruppen', cropped_with_groups)
+cv2.waitKey(0)
+cv2.destroyAllWindows()

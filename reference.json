@@ -12,8 +12,9 @@
     },
     {
       "name": "H2O2",
-      "group_idx": 2,
+      "group_idx": 1,
       "cols": [
+        2,
         3,
         4
       ],
@@ -21,12 +22,12 @@
     },
     {
       "name": "PHMB",
-      "group_idx": 3,
+      "group_idx": 2,
       "cols": [
         5,
         6
       ],
-      "measure_col": 6
+      "measure_col": 5
     }
   ],
   "cells": [
@@ -68,8 +69,8 @@
       "cell_idx": 2,
       "row_idx": 0,
       "group_idx": 1,
-      "parameter": null,
-      "is_color_cell": false,
+      "parameter": "H2O2",
+      "is_color_cell": true,
       "x": 258,
       "y": 47,
       "w": 46,
@@ -84,7 +85,7 @@
     {
       "cell_idx": 3,
       "row_idx": 0,
-      "group_idx": 2,
+      "group_idx": 1,
       "parameter": "H2O2",
       "is_color_cell": false,
       "x": 335,
@@ -101,7 +102,7 @@
     {
       "cell_idx": 4,
       "row_idx": 0,
-      "group_idx": 2,
+      "group_idx": 1,
       "parameter": "H2O2",
       "is_color_cell": true,
       "x": 458,
@@ -118,9 +119,9 @@
     {
       "cell_idx": 5,
       "row_idx": 0,
-      "group_idx": 3,
+      "group_idx": 2,
       "parameter": "PHMB",
-      "is_color_cell": true,
+      "is_color_cell": false,
       "x": 513,
       "y": 47,
       "w": 80,
@@ -135,7 +136,7 @@
     {
       "cell_idx": 6,
       "row_idx": 0,
-      "group_idx": 3,
+      "group_idx": 2,
       "parameter": "PHMB",
       "is_color_cell": false,
       "x": 620,
@@ -187,8 +188,8 @@
       "cell_idx": 9,
       "row_idx": 1,
       "group_idx": 1,
-      "parameter": null,
-      "is_color_cell": false,
+      "parameter": "H2O2",
+      "is_color_cell": true,
       "x": 258,
       "y": 102,
       "w": 46,
@@ -203,7 +204,7 @@
     {
       "cell_idx": 10,
       "row_idx": 1,
-      "group_idx": 2,
+      "group_idx": 1,
       "parameter": "H2O2",
       "is_color_cell": false,
       "x": 335,
@@ -220,7 +221,7 @@
     {
       "cell_idx": 11,
       "row_idx": 1,
-      "group_idx": 2,
+      "group_idx": 1,
       "parameter": "H2O2",
       "is_color_cell": true,
       "x": 458,
@@ -237,9 +238,9 @@
     {
       "cell_idx": 12,
       "row_idx": 1,
-      "group_idx": 3,
+      "group_idx": 2,
       "parameter": "PHMB",
-      "is_color_cell": true,
+      "is_color_cell": false,
       "x": 513,
       "y": 102,
       "w": 80,
@@ -249,12 +250,12 @@
         118.0,
         136.0
       ],
-      "value": null
+      "value": 100.0
     },
     {
       "cell_idx": 13,
       "row_idx": 1,
-      "group_idx": 3,
+      "group_idx": 2,
       "parameter": "PHMB",
       "is_color_cell": false,
       "x": 620,
@@ -306,8 +307,8 @@
       "cell_idx": 16,
       "row_idx": 2,
       "group_idx": 1,
-      "parameter": null,
-      "is_color_cell": false,
+      "parameter": "H2O2",
+      "is_color_cell": true,
       "x": 258,
       "y": 152,
       "w": 46,
@@ -322,7 +323,7 @@
     {
       "cell_idx": 17,
       "row_idx": 2,
-      "group_idx": 2,
+      "group_idx": 1,
       "parameter": "H2O2",
       "is_color_cell": false,
       "x": 335,
@@ -339,7 +340,7 @@
     {
       "cell_idx": 18,
       "row_idx": 2,
-      "group_idx": 2,
+      "group_idx": 1,
       "parameter": "H2O2",
       "is_color_cell": true,
       "x": 458,
@@ -356,9 +357,9 @@
     {
       "cell_idx": 19,
       "row_idx": 2,
-      "group_idx": 3,
+      "group_idx": 2,
       "parameter": "PHMB",
-      "is_color_cell": true,
+      "is_color_cell": false,
       "x": 513,
       "y": 152,
       "w": 80,
@@ -368,12 +369,12 @@
         107.0,
         121.0
       ],
-      "value": null
+      "value": 75.0
     },
     {
       "cell_idx": 20,
       "row_idx": 2,
-      "group_idx": 3,
+      "group_idx": 2,
       "parameter": "PHMB",
       "is_color_cell": false,
       "x": 620,
@@ -425,8 +426,8 @@
       "cell_idx": 23,
       "row_idx": 3,
       "group_idx": 1,
-      "parameter": null,
-      "is_color_cell": false,
+      "parameter": "H2O2",
+      "is_color_cell": true,
       "x": 258,
       "y": 204,
       "w": 46,
@@ -441,7 +442,7 @@
     {
       "cell_idx": 24,
       "row_idx": 3,
-      "group_idx": 2,
+      "group_idx": 1,
       "parameter": "H2O2",
       "is_color_cell": false,
       "x": 335,
@@ -458,7 +459,7 @@
     {
       "cell_idx": 25,
       "row_idx": 3,
-      "group_idx": 2,
+      "group_idx": 1,
       "parameter": "H2O2",
       "is_color_cell": true,
       "x": 458,
@@ -475,9 +476,9 @@
     {
       "cell_idx": 26,
       "row_idx": 3,
-      "group_idx": 3,
+      "group_idx": 2,
       "parameter": "PHMB",
-      "is_color_cell": true,
+      "is_color_cell": false,
       "x": 513,
       "y": 204,
       "w": 80,
@@ -487,12 +488,12 @@
         87.0,
         106.0
       ],
-      "value": null
+      "value": 50.0
     },
     {
       "cell_idx": 27,
       "row_idx": 3,
-      "group_idx": 3,
+      "group_idx": 2,
       "parameter": "PHMB",
       "is_color_cell": false,
       "x": 620,
@@ -544,8 +545,8 @@
       "cell_idx": 30,
       "row_idx": 4,
       "group_idx": 1,
-      "parameter": null,
-      "is_color_cell": false,
+      "parameter": "H2O2",
+      "is_color_cell": true,
       "x": 258,
       "y": 256,
       "w": 46,
@@ -560,7 +561,7 @@
     {
       "cell_idx": 31,
       "row_idx": 4,
-      "group_idx": 2,
+      "group_idx": 1,
       "parameter": "H2O2",
       "is_color_cell": false,
       "x": 335,
@@ -577,7 +578,7 @@
     {
       "cell_idx": 32,
       "row_idx": 4,
-      "group_idx": 2,
+      "group_idx": 1,
       "parameter": "H2O2",
       "is_color_cell": true,
       "x": 458,
@@ -594,9 +595,9 @@
     {
       "cell_idx": 33,
       "row_idx": 4,
-      "group_idx": 3,
+      "group_idx": 2,
       "parameter": "PHMB",
-      "is_color_cell": true,
+      "is_color_cell": false,
       "x": 513,
       "y": 256,
       "w": 80,
@@ -606,12 +607,12 @@
         30.0,
         91.0
       ],
-      "value": null
+      "value": 40.0
     },
     {
       "cell_idx": 34,
       "row_idx": 4,
-      "group_idx": 3,
+      "group_idx": 2,
       "parameter": "PHMB",
       "is_color_cell": false,
       "x": 620,
@@ -663,8 +664,8 @@
       "cell_idx": 37,
       "row_idx": 5,
       "group_idx": 1,
-      "parameter": null,
-      "is_color_cell": false,
+      "parameter": "H2O2",
+      "is_color_cell": true,
       "x": 258,
       "y": 309,
       "w": 46,
@@ -679,7 +680,7 @@
     {
       "cell_idx": 38,
       "row_idx": 5,
-      "group_idx": 2,
+      "group_idx": 1,
       "parameter": "H2O2",
       "is_color_cell": false,
       "x": 335,
@@ -696,7 +697,7 @@
     {
       "cell_idx": 39,
       "row_idx": 5,
-      "group_idx": 2,
+      "group_idx": 1,
       "parameter": "H2O2",
       "is_color_cell": true,
       "x": 458,
@@ -713,9 +714,9 @@
     {
       "cell_idx": 40,
       "row_idx": 5,
-      "group_idx": 3,
+      "group_idx": 2,
       "parameter": "PHMB",
-      "is_color_cell": true,
+      "is_color_cell": false,
       "x": 513,
       "y": 309,
       "w": 80,
@@ -725,12 +726,12 @@
         30.0,
         102.0
       ],
-      "value": null
+      "value": 30.0
     },
     {
       "cell_idx": 41,
       "row_idx": 5,
-      "group_idx": 3,
+      "group_idx": 2,
       "parameter": "PHMB",
       "is_color_cell": false,
       "x": 620,
@@ -782,8 +783,8 @@
       "cell_idx": 44,
       "row_idx": 6,
       "group_idx": 1,
-      "parameter": null,
-      "is_color_cell": false,
+      "parameter": "H2O2",
+      "is_color_cell": true,
       "x": 258,
       "y": 363,
       "w": 46,
@@ -798,7 +799,7 @@
     {
       "cell_idx": 45,
       "row_idx": 6,
-      "group_idx": 2,
+      "group_idx": 1,
       "parameter": "H2O2",
       "is_color_cell": false,
       "x": 335,
@@ -815,7 +816,7 @@
     {
       "cell_idx": 46,
       "row_idx": 6,
-      "group_idx": 2,
+      "group_idx": 1,
       "parameter": "H2O2",
       "is_color_cell": true,
       "x": 458,
@@ -832,9 +833,9 @@
     {
       "cell_idx": 47,
       "row_idx": 6,
-      "group_idx": 3,
+      "group_idx": 2,
       "parameter": "PHMB",
-      "is_color_cell": true,
+      "is_color_cell": false,
       "x": 513,
       "y": 363,
       "w": 80,
@@ -844,12 +845,12 @@
         48.0,
         111.0
       ],
-      "value": null
+      "value": 20.0
     },
     {
       "cell_idx": 48,
       "row_idx": 6,
-      "group_idx": 3,
+      "group_idx": 2,
       "parameter": "PHMB",
       "is_color_cell": false,
       "x": 620,
@@ -901,8 +902,8 @@
       "cell_idx": 51,
       "row_idx": 7,
       "group_idx": 1,
-      "parameter": null,
-      "is_color_cell": false,
+      "parameter": "H2O2",
+      "is_color_cell": true,
       "x": 258,
       "y": 414,
       "w": 46,
@@ -917,7 +918,7 @@
     {
       "cell_idx": 52,
       "row_idx": 7,
-      "group_idx": 2,
+      "group_idx": 1,
       "parameter": "H2O2",
       "is_color_cell": false,
       "x": 335,
@@ -934,7 +935,7 @@
     {
       "cell_idx": 53,
       "row_idx": 7,
-      "group_idx": 2,
+      "group_idx": 1,
       "parameter": "H2O2",
       "is_color_cell": true,
       "x": 458,
@@ -951,9 +952,9 @@
     {
       "cell_idx": 54,
       "row_idx": 7,
-      "group_idx": 3,
+      "group_idx": 2,
       "parameter": "PHMB",
-      "is_color_cell": true,
+      "is_color_cell": false,
       "x": 513,
       "y": 414,
       "w": 80,
@@ -968,7 +969,7 @@
     {
       "cell_idx": 55,
       "row_idx": 7,
-      "group_idx": 3,
+      "group_idx": 2,
       "parameter": "PHMB",
       "is_color_cell": false,
       "x": 620,

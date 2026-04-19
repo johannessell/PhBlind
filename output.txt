@@ -1,0 +1,77 @@
+Gefundene Rechtecke: 27
+  Rechteck 0: x=338, y=418, w=93, h=41
+  Rechteck 1: x=261, y=417, w=45, h=42
+  Rechteck 2: x=461, y=366, w=43, h=42
+  Rechteck 3: x=623, y=316, w=95, h=41
+  Rechteck 4: x=460, y=314, w=45, h=42
+  Rechteck 5: x=262, y=312, w=45, h=43
+  Rechteck 6: x=170, y=312, w=80, h=43
+  Rechteck 7: x=54, y=312, w=93, h=41
+  Rechteck 8: x=461, y=261, w=45, h=43
+  Rechteck 9: x=516, y=262, w=80, h=41
+  Rechteck 10: x=173, y=260, w=77, h=42
+  Rechteck 11: x=54, y=259, w=93, h=43
+  Rechteck 12: x=623, y=211, w=96, h=43
+  Rechteck 13: x=518, y=210, w=78, h=42
+  Rechteck 14: x=462, y=210, w=44, h=42
+  Rechteck 15: x=262, y=209, w=46, h=42
+  Rechteck 16: x=54, y=207, w=94, h=42
+  Rechteck 17: x=517, y=159, w=80, h=41
+  Rechteck 18: x=340, y=158, w=92, h=41
+  Rechteck 19: x=263, y=156, w=45, h=42
+  Rechteck 20: x=53, y=155, w=96, h=43
+  Rechteck 21: x=625, y=106, w=95, h=43
+  Rechteck 22: x=340, y=106, w=93, h=41
+  Rechteck 23: x=463, y=105, w=44, h=43
+  Rechteck 24: x=262, y=105, w=46, h=42
+  Rechteck 25: x=463, y=53, w=45, h=42
+  Rechteck 26: x=340, y=53, w=93, h=42
+    Checking col 1 at x=170, distance=120
+      Adding color col 1
+    Checking col 2 at x=258, distance=208
+    Checking col 3 at x=335, distance=285
+    Checking col 4 at x=458, distance=408
+    Checking col 5 at x=513, distance=463
+    Checking col 6 at x=620, distance=570
+    Checking col 2 at x=258, distance=77
+      Adding color col 2
+    Checking col 4 at x=458, distance=123
+      Adding color col 4
+    Checking col 5 at x=513, distance=178
+    Checking col 6 at x=620, distance=285
+    Checking col 6 at x=620, distance=107
+    Checking col 5 at x=513, distance=107
+
+--- Spalten-Positionen ---
+  Spalte 0: x=50
+  Spalte 1: x=170
+  Spalte 2: x=258
+  Spalte 3: x=335
+  Spalte 4: x=458
+  Spalte 5: x=513
+  Spalte 6: x=620
+
+--- Spalten-Klassifikation ---
+  Spalte  0: measure   hue=11.0  sat=50.0  hue_iqr=3.0
+  Spalte  1: color     hue=7.0  sat=107.0  hue_iqr=8.0
+  Spalte  2: color     hue=15.0  sat=126.0  hue_iqr=3.0
+  Spalte  3: measure   hue=9.0  sat=23.0  hue_iqr=127.0
+  Spalte  4: color     hue=18.0  sat=102.0  hue_iqr=5.0
+  Spalte  5: measure   hue=99.0  sat=43.0  hue_iqr=8.0
+  Spalte  6: measure   hue=107.0  sat=41.0  hue_iqr=3.0
+
+--- Spaltengruppen ---
+  cols=[0, 1]  measure_col=0
+  cols=[2, 3, 4]  measure_col=3
+  cols=[5, 6]  measure_col=5
+
+--- Crosscheck: Hue-─hnlichkeit color-Spalten pro Gruppe ---
+  Gruppe 1 cols=[2, 3, 4]  -> 1 Zeilen abweichend
+Traceback (most recent call last):
+  File "C:\Users\johan\PycharmProjects\PhBlind\contour_detection03.py", line 372, in <module>
+    print(f"    {marker} Zeile {row_idx:2d}: {hue_str}  max_diff={max_diff}")
+    ~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\johan\AppData\Local\Programs\Python\Python313\Lib\encodings\cp1252.py", line 19, in encode
+    return codecs.charmap_encode(input,self.errors,encoding_table)[0]
+           ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+UnicodeEncodeError: 'charmap' codec can't encode characters in position 4-5: character maps to <undefined>

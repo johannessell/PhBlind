@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OCR Result Editor</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <header>
+            <h1>🔍 OCR Result Editor</h1>
+            <p>Interactive correction and ROI adjustment for OCR results</p>
+        </header>
+
+        <!-- Main Content -->
+        <main>
+            <!-- Step 1: Upload -->
+            <section class="step" id="step-upload">
+                <h2>Step 1: Upload Image</h2>
+                <div class="upload-area">
+                    <input type="file" id="imageInput" accept="image/*">
+                    <label for="imageInput">
+                        <span class="upload-icon">📁</span>
+                        <span>Click to upload or drag & drop</span>
+                    </label>
+                </div>
+                <button id="uploadBtn" class="btn btn-primary">Upload</button>
+            </section>
+
+            <!-- Step 2: Define ROIs -->
+            <section class="step hidden" id="step-rois">
+                <h2>Step 2: Process ROIs</h2>
+                
+                <div class="roi-mode-selector">
+                    <button id="autoDetectModeBtn" class="btn btn-primary active">🤖 Auto-Detect (Recommended)</button>
+                    <button id="manualModeBtn" class="btn btn-secondary">✏️ Manual ROI Drawing</button>
+                </div>
+
+                <!-- Auto-Detect Mode -->
+                <div id="autoDetectMode" class="mode-container">
+                    <p>ROIs will be automatically detected from contours in your image.</p>
+                    <button id="processOcrAutoBtn" class="btn btn-primary">Auto-Detect & Process OCR</button>
+                </div>
+
+                <!-- Manual Mode (Hidden by default) -->
+                <div id="manualMode" class="mode-container hidden">
+                    <p>Click and drag to create regions for text recognition</p>
+                    
+                    <div class="canvas-container">
+                        <canvas id="imageCanvas" width="800" height="600"></canvas>
+                        <div id="roiOverlay" class="roi-overlay"></div>
+                    </div>
+
+                    <div class="roi-controls">
+                        <button id="clearRoisBtn" class="btn btn-secondary">Clear All ROIs</button>
+                    </div>
+
+                    <div id="roiList" class="roi-list"></div>
+
+                    <button id="processOcrBtn" class="btn btn-primary">Process OCR</button>
+                </div>
+            </section>
+
+            <!-- Step 3: Review & Correct -->
+            <section class="step hidden" id="step-review">
+                <h2>Step 3: Review & Correct Results</h2>
+                <p class="step-description">Click on any text value to edit it. ROI boxes are highlighted on the image below.</p>
+                
+                <!-- Main content: Image + Results in responsive layout -->
+                <div class="review-container">
+                    <!-- Left: Image with ROI overlays -->
+                    <div class="review-image-section">
+                        <h3>📷 Image Preview with ROIs</h3>
+                        <div class="image-canvas-wrapper">
+                            <canvas id="reviewCanvas" width="400" height="300"></canvas>
+                            <canvas id="roiOverlayCanvas" width="400" height="300" style="position: absolute; top: 0; left: 0; cursor: pointer;"></canvas>
+                        </div>
+                    </div>
+                    
+                    <!-- Right: Text blocks for editing -->
+                    <div class="review-results-section">
+                        <h3>✏️ Text Values ({total_blocks})</h3>
+                        <div class="filter-bar">
+                            <input type="text" id="searchInput" placeholder="🔍 Search or filter..." class="search-input">
+                            <select id="sortSelect" class="sort-select">
+                                <option value="order">Sort: Original Order</option>
+                                <option value="edited">Sort: Edited First</option>
+                                <option value="confidence">Sort: By Confidence</option>
+                            </select>
+                        </div>
+                        <div id="resultsList" class="results-list-enhanced"></div>
+                    </div>
+                </div>
+
+                <!-- Action buttons -->
+                <div class="action-buttons">
+                    <button id="exportBtn" class="btn btn-success">💾 Export Results (JSON)</button>
+                    <button id="restartBtn" class="btn btn-secondary">🔄 Start Over</button>
+                </div>
+            </section>
+        </main>
+
+        <!-- Modal for editing -->
+        <div id="editModal" class="modal hidden">
+            <div class="modal-content">
+                <h3>Edit Value</h3>
+                <div class="modal-body">
+                    <label for="editOriginal">Original:</label>
+                    <input type="text" id="editOriginal" readonly>
+                    
+                    <label for="editCorrected">Corrected:</label>
+                    <input type="text" id="editCorrected">
+                </div>
+                <div class="modal-footer">
+                    <button id="editSaveBtn" class="btn btn-primary">Save</button>
+                    <button id="editCancelBtn" class="btn btn-secondary">Cancel</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="{{ url_for('static', filename='editor.js') }}"></script>
+</body>
+</html>

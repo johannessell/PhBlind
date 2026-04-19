@@ -34,7 +34,7 @@ def capture_reference_photo(cap, scale):
 
 cap = cv2.VideoCapture(1)
 
-photo = capture_reference_photo(cap, 1)
+image = capture_reference_photo(cap, 1)
 
 if image is None:
     raise Exception("Bild konnte nicht geladen werden!")

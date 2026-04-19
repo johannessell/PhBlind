@@ -2,31 +2,13 @@
   "image_file": "template02.jpg",
   "parameters": [
     {
-      "name": "B0180",
+      "name": "80180",
       "group_idx": 0,
       "cols": [
         0,
         1
       ],
       "measure_col": 0
-    },
-    {
-      "name": "H2O2",
-      "group_idx": 2,
-      "cols": [
-        3,
-        4
-      ],
-      "measure_col": 3
-    },
-    {
-      "name": "PHMB",
-      "group_idx": 3,
-      "cols": [
-        5,
-        6
-      ],
-      "measure_col": 6
     }
   ],
   "cells": [
@@ -34,16 +16,16 @@
       "cell_idx": 0,
       "row_idx": 0,
       "group_idx": 0,
-      "parameter": "B0180",
+      "parameter": "80180",
       "is_color_cell": false,
-      "x": 50,
-      "y": 47,
-      "w": 96,
-      "h": 43,
+      "x": 52,
+      "y": 50,
+      "w": 90,
+      "h": 41,
       "hsv_median": [
-        8.0,
-        24.0,
-        171.0
+        11.0,
+        12.0,
+        170.0
       ],
       "value": null
     },
@@ -51,16 +33,16 @@
       "cell_idx": 1,
       "row_idx": 0,
       "group_idx": 0,
-      "parameter": "B0180",
+      "parameter": "80180",
       "is_color_cell": true,
-      "x": 170,
-      "y": 47,
-      "w": 77,
-      "h": 43,
+      "x": 166,
+      "y": 50,
+      "w": 76,
+      "h": 41,
       "hsv_median": [
-        145.0,
-        9.0,
-        163.0
+        15.0,
+        8.0,
+        168.0
       ],
       "value": null
     },
@@ -69,32 +51,32 @@
       "row_idx": 0,
       "group_idx": 1,
       "parameter": null,
-      "is_color_cell": false,
-      "x": 258,
-      "y": 47,
-      "w": 46,
-      "h": 43,
+      "is_color_cell": true,
+      "x": 253,
+      "y": 50,
+      "w": 42,
+      "h": 41,
       "hsv_median": [
-        6.0,
-        16.0,
-        165.0
+        110.0,
+        3.0,
+        170.0
       ],
       "value": null
     },
     {
       "cell_idx": 3,
       "row_idx": 0,
-      "group_idx": 2,
-      "parameter": "H2O2",
+      "group_idx": 1,
+      "parameter": null,
       "is_color_cell": false,
-      "x": 335,
-      "y": 47,
-      "w": 94,
-      "h": 43,
+      "x": 324,
+      "y": 50,
+      "w": 86,
+      "h": 41,
       "hsv_median": [
-        140.0,
-        9.0,
-        162.0
+        113.0,
+        12.0,
+        173.0
       ],
       "value": null
     },
@@ -102,33 +84,33 @@
       "cell_idx": 4,
       "row_idx": 0,
       "group_idx": 2,
-      "parameter": "H2O2",
-      "is_color_cell": true,
-      "x": 458,
-      "y": 47,
-      "w": 45,
-      "h": 43,
+      "parameter": null,
+      "is_color_cell": false,
+      "x": 437,
+      "y": 50,
+      "w": 41,
+      "h": 41,
       "hsv_median": [
-        112.0,
-        20.0,
-        163.0
+        110.0,
+        16.0,
+        174.0
       ],
       "value": null
     },
     {
       "cell_idx": 5,
       "row_idx": 0,
-      "group_idx": 3,
-      "parameter": "PHMB",
+      "group_idx": 2,
+      "parameter": null,
       "is_color_cell": true,
-      "x": 513,
-      "y": 47,
-      "w": 80,
-      "h": 43,
+      "x": 488,
+      "y": 50,
+      "w": 73,
+      "h": 41,
       "hsv_median": [
-        112.0,
-        16.0,
-        162.0
+        107.0,
+        17.0,
+        175.0
       ],
       "value": null
     },
@@ -136,16 +118,16 @@
       "cell_idx": 6,
       "row_idx": 0,
       "group_idx": 3,
-      "parameter": "PHMB",
+      "parameter": null,
       "is_color_cell": false,
-      "x": 620,
-      "y": 47,
-      "w": 97,
-      "h": 43,
+      "x": 586,
+      "y": 50,
+      "w": 86,
+      "h": 41,
       "hsv_median": [
-        107.0,
-        36.0,
-        169.0
+        106.0,
+        38.0,
+        179.0
       ],
       "value": null
     },
@@ -153,16 +135,16 @@
       "cell_idx": 7,
       "row_idx": 1,
       "group_idx": 0,
-      "parameter": "B0180",
+      "parameter": "80180",
       "is_color_cell": false,
-      "x": 50,
-      "y": 102,
-      "w": 96,
-      "h": 43,
+      "x": 52,
+      "y": 99,
+      "w": 90,
+      "h": 42,
       "hsv_median": [
-        11.0,
-        39.0,
-        173.0
+        12.0,
+        14.0,
+        174.0
       ],
       "value": 8.2
     },
@@ -170,16 +152,16 @@
       "cell_idx": 8,
       "row_idx": 1,
       "group_idx": 0,
-      "parameter": "B0180",
+      "parameter": "80180",
       "is_color_cell": true,
-      "x": 170,
-      "y": 102,
-      "w": 77,
-      "h": 43,
+      "x": 166,
+      "y": 99,
+      "w": 76,
+      "h": 42,
       "hsv_median": [
         172.0,
         118.0,
-        154.0
+        167.0
       ],
       "value": null
     },
@@ -188,32 +170,32 @@
       "row_idx": 1,
       "group_idx": 1,
       "parameter": null,
-      "is_color_cell": false,
-      "x": 258,
-      "y": 102,
-      "w": 46,
-      "h": 43,
+      "is_color_cell": true,
+      "x": 253,
+      "y": 99,
+      "w": 42,
+      "h": 42,
       "hsv_median": [
         12.0,
-        147.0,
-        164.0
+        133.0,
+        170.0
       ],
       "value": null
     },
     {
       "cell_idx": 10,
       "row_idx": 1,
-      "group_idx": 2,
-      "parameter": "H2O2",
+      "group_idx": 1,
+      "parameter": null,
       "is_color_cell": false,
-      "x": 335,
-      "y": 102,
-      "w": 94,
-      "h": 43,
+      "x": 324,
+      "y": 99,
+      "w": 86,
+      "h": 42,
       "hsv_median": [
-        6.0,
-        17.0,
-        156.0
+        116.0,
+        7.0,
+        168.0
       ],
       "value": 50.0
     },
@@ -221,33 +203,33 @@
       "cell_idx": 11,
       "row_idx": 1,
       "group_idx": 2,
-      "parameter": "H2O2",
-      "is_color_cell": true,
-      "x": 458,
-      "y": 102,
-      "w": 45,
-      "h": 43,
+      "parameter": null,
+      "is_color_cell": false,
+      "x": 437,
+      "y": 99,
+      "w": 41,
+      "h": 42,
       "hsv_median": [
         12.0,
-        141.0,
-        156.0
+        127.0,
+        170.0
       ],
       "value": null
     },
     {
       "cell_idx": 12,
       "row_idx": 1,
-      "group_idx": 3,
-      "parameter": "PHMB",
+      "group_idx": 2,
+      "parameter": null,
       "is_color_cell": true,
-      "x": 513,
-      "y": 102,
-      "w": 80,
-      "h": 43,
+      "x": 488,
+      "y": 99,
+      "w": 73,
+      "h": 42,
       "hsv_median": [
-        104.0,
-        118.0,
-        136.0
+        103.0,
+        124.0,
+        148.0
       ],
       "value": null
     },
@@ -255,16 +237,16 @@
       "cell_idx": 13,
       "row_idx": 1,
       "group_idx": 3,
-      "parameter": "PHMB",
+      "parameter": null,
       "is_color_cell": false,
-      "x": 620,
-      "y": 102,
-      "w": 97,
-      "h": 43,
+      "x": 586,
+      "y": 99,
+      "w": 86,
+      "h": 42,
       "hsv_median": [
-        107.0,
-        36.0,
-        170.0
+        108.0,
+        31.0,
+        175.0
       ],
       "value": null
     },
@@ -272,16 +254,16 @@
       "cell_idx": 14,
       "row_idx": 2,
       "group_idx": 0,
-      "parameter": "B0180",
+      "parameter": "80180",
       "is_color_cell": false,
-      "x": 50,
-      "y": 152,
-      "w": 96,
-      "h": 43,
+      "x": 52,
+      "y": 146,
+      "w": 90,
+      "h": 40,
       "hsv_median": [
-        11.0,
-        44.0,
-        167.0
+        13.0,
+        27.0,
+        180.0
       ],
       "value": 7.8
     },
@@ -289,16 +271,16 @@
       "cell_idx": 15,
       "row_idx": 2,
       "group_idx": 0,
-      "parameter": "B0180",
+      "parameter": "80180",
       "is_color_cell": true,
-      "x": 170,
-      "y": 152,
-      "w": 77,
-      "h": 43,
+      "x": 166,
+      "y": 146,
+      "w": 76,
+      "h": 40,
       "hsv_median": [
-        0.0,
-        104.0,
-        153.0
+        177.0,
+        99.0,
+        163.0
       ],
       "value": null
     },
@@ -307,32 +289,32 @@
       "row_idx": 2,
       "group_idx": 1,
       "parameter": null,
-      "is_color_cell": false,
-      "x": 258,
-      "y": 152,
-      "w": 46,
-      "h": 43,
+      "is_color_cell": true,
+      "x": 253,
+      "y": 146,
+      "w": 42,
+      "h": 40,
       "hsv_median": [
-        14.0,
-        150.0,
-        160.0
+        15.0,
+        133.0,
+        165.0
       ],
       "value": null
     },
     {
       "cell_idx": 17,
       "row_idx": 2,
-      "group_idx": 2,
-      "parameter": "H2O2",
+      "group_idx": 1,
+      "parameter": null,
       "is_color_cell": false,
-      "x": 335,
-      "y": 152,
-      "w": 94,
-      "h": 43,
+      "x": 324,
+      "y": 146,
+      "w": 86,
+      "h": 40,
       "hsv_median": [
-        5.0,
-        23.0,
-        146.0
+        120.0,
+        8.0,
+        157.0
       ],
       "value": 40.0
     },
@@ -340,33 +322,33 @@
       "cell_idx": 18,
       "row_idx": 2,
       "group_idx": 2,
-      "parameter": "H2O2",
-      "is_color_cell": true,
-      "x": 458,
-      "y": 152,
-      "w": 45,
-      "h": 43,
+      "parameter": null,
+      "is_color_cell": false,
+      "x": 437,
+      "y": 146,
+      "w": 41,
+      "h": 40,
       "hsv_median": [
         15.0,
-        141.0,
-        149.0
+        124.0,
+        159.0
       ],
       "value": null
     },
     {
       "cell_idx": 19,
       "row_idx": 2,
-      "group_idx": 3,
-      "parameter": "PHMB",
+      "group_idx": 2,
+      "parameter": null,
       "is_color_cell": true,
-      "x": 513,
-      "y": 152,
-      "w": 80,
-      "h": 43,
+      "x": 488,
+      "y": 146,
+      "w": 73,
+      "h": 40,
       "hsv_median": [
-        103.0,
-        107.0,
-        121.0
+        102.0,
+        122.0,
+        132.0
       ],
       "value": null
     },
@@ -374,33 +356,33 @@
       "cell_idx": 20,
       "row_idx": 2,
       "group_idx": 3,
-      "parameter": "PHMB",
+      "parameter": null,
       "is_color_cell": false,
-      "x": 620,
-      "y": 152,
-      "w": 97,
-      "h": 43,
+      "x": 586,
+      "y": 146,
+      "w": 86,
+      "h": 40,
       "hsv_median": [
         107.0,
-        38.0,
-        164.0
+        32.0,
+        163.0
       ],
-      "value": 75.0
+      "value": null
     },
     {
       "cell_idx": 21,
       "row_idx": 3,
       "group_idx": 0,
-      "parameter": "B0180",
+      "parameter": "80180",
       "is_color_cell": false,
-      "x": 50,
-      "y": 204,
-      "w": 96,
-      "h": 43,
+      "x": 52,
+      "y": 196,
+      "w": 90,
+      "h": 39,
       "hsv_median": [
         11.0,
-        50.0,
-        167.0
+        30.0,
+        184.0
       ],
       "value": 7.6
     },
@@ -408,16 +390,16 @@
       "cell_idx": 22,
       "row_idx": 3,
       "group_idx": 0,
-      "parameter": "B0180",
+      "parameter": "80180",
       "is_color_cell": true,
-      "x": 170,
-      "y": 204,
-      "w": 77,
-      "h": 43,
+      "x": 166,
+      "y": 196,
+      "w": 76,
+      "h": 39,
       "hsv_median": [
-        5.0,
-        115.0,
-        151.0
+        3.0,
+        100.0,
+        159.0
       ],
       "value": null
     },
@@ -426,32 +408,32 @@
       "row_idx": 3,
       "group_idx": 1,
       "parameter": null,
-      "is_color_cell": false,
-      "x": 258,
-      "y": 204,
-      "w": 46,
-      "h": 43,
+      "is_color_cell": true,
+      "x": 253,
+      "y": 196,
+      "w": 42,
+      "h": 39,
       "hsv_median": [
         16.0,
-        147.0,
-        146.0
+        128.0,
+        157.0
       ],
       "value": null
     },
     {
       "cell_idx": 24,
       "row_idx": 3,
-      "group_idx": 2,
-      "parameter": "H2O2",
+      "group_idx": 1,
+      "parameter": null,
       "is_color_cell": false,
-      "x": 335,
-      "y": 204,
-      "w": 94,
-      "h": 43,
+      "x": 324,
+      "y": 196,
+      "w": 86,
+      "h": 39,
       "hsv_median": [
-        5.0,
-        26.0,
-        130.0
+        122.0,
+        9.0,
+        147.0
       ],
       "value": 30.0
     },
@@ -459,33 +441,33 @@
       "cell_idx": 25,
       "row_idx": 3,
       "group_idx": 2,
-      "parameter": "H2O2",
-      "is_color_cell": true,
-      "x": 458,
-      "y": 204,
-      "w": 45,
-      "h": 43,
+      "parameter": null,
+      "is_color_cell": false,
+      "x": 437,
+      "y": 196,
+      "w": 41,
+      "h": 39,
       "hsv_median": [
-        17.0,
-        141.0,
-        140.0
+        16.0,
+        118.0,
+        151.0
       ],
       "value": null
     },
     {
       "cell_idx": 26,
       "row_idx": 3,
-      "group_idx": 3,
-      "parameter": "PHMB",
+      "group_idx": 2,
+      "parameter": null,
       "is_color_cell": true,
-      "x": 513,
-      "y": 204,
-      "w": 80,
-      "h": 43,
+      "x": 488,
+      "y": 196,
+      "w": 73,
+      "h": 39,
       "hsv_median": [
         99.0,
-        87.0,
-        106.0
+        106.0,
+        113.0
       ],
       "value": null
     },
@@ -493,33 +475,33 @@
       "cell_idx": 27,
       "row_idx": 3,
       "group_idx": 3,
-      "parameter": "PHMB",
+      "parameter": null,
       "is_color_cell": false,
-      "x": 620,
-      "y": 204,
-      "w": 97,
-      "h": 43,
+      "x": 586,
+      "y": 196,
+      "w": 86,
+      "h": 39,
       "hsv_median": [
-        107.0,
-        44.0,
-        156.0
+        108.0,
+        37.0,
+        155.0
       ],
-      "value": 50.0
+      "value": null
     },
     {
       "cell_idx": 28,
       "row_idx": 4,
       "group_idx": 0,
-      "parameter": "B0180",
+      "parameter": "80180",
       "is_color_cell": false,
-      "x": 50,
-      "y": 256,
-      "w": 96,
-      "h": 43,
+      "x": 52,
+      "y": 243,
+      "w": 90,
+      "h": 40,
       "hsv_median": [
         12.0,
-        58.0,
-        165.0
+        29.0,
+        180.0
       ],
       "value": 7.4
     },
@@ -527,16 +509,16 @@
       "cell_idx": 29,
       "row_idx": 4,
       "group_idx": 0,
-      "parameter": "B0180",
+      "parameter": "80180",
       "is_color_cell": true,
-      "x": 170,
-      "y": 256,
-      "w": 77,
-      "h": 43,
+      "x": 166,
+      "y": 243,
+      "w": 76,
+      "h": 40,
       "hsv_median": [
-        8.0,
-        126.0,
-        150.0
+        7.0,
+        105.0,
+        158.0
       ],
       "value": null
     },
@@ -545,32 +527,32 @@
       "row_idx": 4,
       "group_idx": 1,
       "parameter": null,
-      "is_color_cell": false,
-      "x": 258,
-      "y": 256,
-      "w": 46,
-      "h": 43,
+      "is_color_cell": true,
+      "x": 253,
+      "y": 243,
+      "w": 42,
+      "h": 40,
       "hsv_median": [
         17.0,
-        128.5,
-        144.0
+        104.0,
+        158.0
       ],
       "value": null
     },
     {
       "cell_idx": 31,
       "row_idx": 4,
-      "group_idx": 2,
-      "parameter": "H2O2",
+      "group_idx": 1,
+      "parameter": null,
       "is_color_cell": false,
-      "x": 335,
-      "y": 256,
-      "w": 94,
-      "h": 43,
+      "x": 324,
+      "y": 243,
+      "w": 86,
+      "h": 40,
       "hsv_median": [
-        5.0,
-        33.0,
-        129.0
+        140.0,
+        7.0,
+        146.0
       ],
       "value": 20.0
     },
@@ -578,33 +560,33 @@
       "cell_idx": 32,
       "row_idx": 4,
       "group_idx": 2,
-      "parameter": "H2O2",
-      "is_color_cell": true,
-      "x": 458,
-      "y": 256,
-      "w": 45,
-      "h": 43,
+      "parameter": null,
+      "is_color_cell": false,
+      "x": 437,
+      "y": 243,
+      "w": 41,
+      "h": 40,
       "hsv_median": [
         18.0,
-        114.0,
-        139.0
+        94.0,
+        149.0
       ],
       "value": null
     },
     {
       "cell_idx": 33,
       "row_idx": 4,
-      "group_idx": 3,
-      "parameter": "PHMB",
+      "group_idx": 2,
+      "parameter": null,
       "is_color_cell": true,
-      "x": 513,
-      "y": 256,
-      "w": 80,
-      "h": 43,
+      "x": 488,
+      "y": 243,
+      "w": 73,
+      "h": 40,
       "hsv_median": [
         95.0,
-        30.0,
-        91.0
+        35.0,
+        94.0
       ],
       "value": null
     },
@@ -612,16 +594,16 @@
       "cell_idx": 34,
       "row_idx": 4,
       "group_idx": 3,
-      "parameter": "PHMB",
+      "parameter": null,
       "is_color_cell": false,
-      "x": 620,
-      "y": 256,
-      "w": 97,
-      "h": 43,
+      "x": 586,
+      "y": 243,
+      "w": 86,
+      "h": 40,
       "hsv_median": [
-        107.0,
-        42.0,
-        152.0
+        109.0,
+        28.0,
+        151.0
       ],
       "value": 40.0
     },
@@ -629,16 +611,16 @@
       "cell_idx": 35,
       "row_idx": 5,
       "group_idx": 0,
-      "parameter": "B0180",
+      "parameter": "80180",
       "is_color_cell": false,
-      "x": 50,
-      "y": 309,
-      "w": 96,
-      "h": 42,
+      "x": 52,
+      "y": 291,
+      "w": 90,
+      "h": 40,
       "hsv_median": [
         12.0,
-        54.0,
-        156.0
+        29.0,
+        178.0
       ],
       "value": 7.2
     },
@@ -646,16 +628,16 @@
       "cell_idx": 36,
       "row_idx": 5,
       "group_idx": 0,
-      "parameter": "B0180",
+      "parameter": "80180",
       "is_color_cell": true,
-      "x": 170,
-      "y": 309,
-      "w": 77,
-      "h": 42,
+      "x": 166,
+      "y": 291,
+      "w": 76,
+      "h": 40,
       "hsv_median": [
         9.0,
-        120.0,
-        148.0
+        105.0,
+        159.0
       ],
       "value": null
     },
@@ -664,32 +646,32 @@
       "row_idx": 5,
       "group_idx": 1,
       "parameter": null,
-      "is_color_cell": false,
-      "x": 258,
-      "y": 309,
-      "w": 46,
-      "h": 42,
+      "is_color_cell": true,
+      "x": 253,
+      "y": 291,
+      "w": 42,
+      "h": 40,
       "hsv_median": [
-        18.0,
-        120.0,
-        145.0
+        20.0,
+        97.0,
+        161.0
       ],
       "value": null
     },
     {
       "cell_idx": 38,
       "row_idx": 5,
-      "group_idx": 2,
-      "parameter": "H2O2",
+      "group_idx": 1,
+      "parameter": null,
       "is_color_cell": false,
-      "x": 335,
-      "y": 309,
-      "w": 94,
-      "h": 42,
+      "x": 324,
+      "y": 291,
+      "w": 86,
+      "h": 40,
       "hsv_median": [
-        5.0,
-        34.0,
-        128.0
+        150.0,
+        9.0,
+        147.0
       ],
       "value": 15.0
     },
@@ -697,33 +679,33 @@
       "cell_idx": 39,
       "row_idx": 5,
       "group_idx": 2,
-      "parameter": "H2O2",
-      "is_color_cell": true,
-      "x": 458,
-      "y": 309,
-      "w": 45,
-      "h": 42,
+      "parameter": null,
+      "is_color_cell": false,
+      "x": 437,
+      "y": 291,
+      "w": 41,
+      "h": 40,
       "hsv_median": [
         20.0,
-        107.0,
-        137.0
+        92.0,
+        151.0
       ],
       "value": null
     },
     {
       "cell_idx": 40,
       "row_idx": 5,
-      "group_idx": 3,
-      "parameter": "PHMB",
+      "group_idx": 2,
+      "parameter": null,
       "is_color_cell": true,
-      "x": 513,
-      "y": 309,
-      "w": 80,
-      "h": 42,
+      "x": 488,
+      "y": 291,
+      "w": 73,
+      "h": 40,
       "hsv_median": [
-        63.0,
-        30.0,
-        102.0
+        71.0,
+        39.0,
+        106.0
       ],
       "value": null
     },
@@ -731,16 +713,16 @@
       "cell_idx": 41,
       "row_idx": 5,
       "group_idx": 3,
-      "parameter": "PHMB",
+      "parameter": null,
       "is_color_cell": false,
-      "x": 620,
-      "y": 309,
-      "w": 97,
-      "h": 42,
+      "x": 586,
+      "y": 291,
+      "w": 86,
+      "h": 40,
       "hsv_median": [
-        107.0,
-        35.0,
-        150.0
+        120.0,
+        14.0,
+        147.0
       ],
       "value": 30.0
     },
@@ -748,16 +730,16 @@
       "cell_idx": 42,
       "row_idx": 6,
       "group_idx": 0,
-      "parameter": "B0180",
+      "parameter": "80180",
       "is_color_cell": false,
-      "x": 50,
-      "y": 363,
-      "w": 96,
-      "h": 42,
+      "x": 52,
+      "y": 337,
+      "w": 90,
+      "h": 39,
       "hsv_median": [
-        11.0,
-        51.0,
-        154.0
+        14.0,
+        30.0,
+        182.0
       ],
       "value": 7.0
     },
@@ -765,16 +747,16 @@
       "cell_idx": 43,
       "row_idx": 6,
       "group_idx": 0,
-      "parameter": "B0180",
+      "parameter": "80180",
       "is_color_cell": true,
-      "x": 170,
-      "y": 363,
-      "w": 77,
-      "h": 42,
+      "x": 166,
+      "y": 337,
+      "w": 76,
+      "h": 39,
       "hsv_median": [
-        12.0,
-        128.0,
-        151.0
+        13.0,
+        110.0,
+        170.0
       ],
       "value": null
     },
@@ -783,66 +765,66 @@
       "row_idx": 6,
       "group_idx": 1,
       "parameter": null,
-      "is_color_cell": false,
-      "x": 258,
-      "y": 363,
-      "w": 46,
-      "h": 42,
+      "is_color_cell": true,
+      "x": 253,
+      "y": 337,
+      "w": 42,
+      "h": 39,
       "hsv_median": [
-        17.0,
-        97.0,
-        147.0
+        21.0,
+        81.0,
+        166.0
       ],
       "value": null
     },
     {
       "cell_idx": 45,
       "row_idx": 6,
-      "group_idx": 2,
-      "parameter": "H2O2",
+      "group_idx": 1,
+      "parameter": null,
       "is_color_cell": false,
-      "x": 335,
-      "y": 363,
-      "w": 94,
-      "h": 42,
+      "x": 324,
+      "y": 337,
+      "w": 86,
+      "h": 39,
       "hsv_median": [
-        5.0,
-        35.0,
-        127.0
+        171.0,
+        15.0,
+        154.0
       ],
-      "value": null
+      "value": 10.0
     },
     {
       "cell_idx": 46,
       "row_idx": 6,
       "group_idx": 2,
-      "parameter": "H2O2",
-      "is_color_cell": true,
-      "x": 458,
-      "y": 363,
-      "w": 45,
-      "h": 42,
+      "parameter": null,
+      "is_color_cell": false,
+      "x": 437,
+      "y": 337,
+      "w": 41,
+      "h": 39,
       "hsv_median": [
-        20.0,
-        84.0,
-        134.0
+        21.0,
+        75.0,
+        152.0
       ],
       "value": null
     },
     {
       "cell_idx": 47,
       "row_idx": 6,
-      "group_idx": 3,
-      "parameter": "PHMB",
+      "group_idx": 2,
+      "parameter": null,
       "is_color_cell": true,
-      "x": 513,
-      "y": 363,
-      "w": 80,
-      "h": 42,
+      "x": 488,
+      "y": 337,
+      "w": 73,
+      "h": 39,
       "hsv_median": [
-        29.0,
-        48.0,
-        111.0
+        24.0,
+        46.0,
+        122.0
       ],
       "value": null
     },
@@ -850,16 +832,16 @@
       "cell_idx": 48,
       "row_idx": 6,
       "group_idx": 3,
-      "parameter": "PHMB",
+      "parameter": null,
       "is_color_cell": false,
-      "x": 620,
-      "y": 363,
-      "w": 97,
-      "h": 42,
+      "x": 586,
+      "y": 337,
+      "w": 86,
+      "h": 39,
       "hsv_median": [
-        111.0,
-        30.0,
-        150.0
+        12.0,
+        15.0,
+        148.0
       ],
       "value": 20.0
     },
@@ -867,16 +849,16 @@
       "cell_idx": 49,
       "row_idx": 7,
       "group_idx": 0,
-      "parameter": "B0180",
+      "parameter": "80180",
       "is_color_cell": false,
-      "x": 50,
-      "y": 414,
-      "w": 96,
-      "h": 42,
+      "x": 52,
+      "y": 385,
+      "w": 90,
+      "h": 39,
       "hsv_median": [
         11.0,
-        55.0,
-        151.0
+        30.0,
+        182.0
       ],
       "value": 6.8
     },
@@ -884,16 +866,16 @@
       "cell_idx": 50,
       "row_idx": 7,
       "group_idx": 0,
-      "parameter": "B0180",
+      "parameter": "80180",
       "is_color_cell": true,
-      "x": 170,
-      "y": 414,
-      "w": 77,
-      "h": 42,
+      "x": 166,
+      "y": 385,
+      "w": 76,
+      "h": 39,
       "hsv_median": [
-        14.0,
-        136.0,
-        148.0
+        15.0,
+        114.0,
+        168.0
       ],
       "value": null
     },
@@ -902,32 +884,32 @@
       "row_idx": 7,
       "group_idx": 1,
       "parameter": null,
-      "is_color_cell": false,
-      "x": 258,
-      "y": 414,
-      "w": 46,
-      "h": 42,
+      "is_color_cell": true,
+      "x": 253,
+      "y": 385,
+      "w": 42,
+      "h": 39,
       "hsv_median": [
-        15.0,
-        73.0,
-        143.0
+        17.0,
+        52.0,
+        164.0
       ],
       "value": null
     },
     {
       "cell_idx": 52,
       "row_idx": 7,
-      "group_idx": 2,
-      "parameter": "H2O2",
+      "group_idx": 1,
+      "parameter": null,
       "is_color_cell": false,
-      "x": 335,
-      "y": 414,
-      "w": 94,
-      "h": 42,
+      "x": 324,
+      "y": 385,
+      "w": 86,
+      "h": 39,
       "hsv_median": [
-        10.0,
-        42.0,
-        130.0
+        8.0,
+        18.0,
+        153.0
       ],
       "value": null
     },
@@ -935,33 +917,33 @@
       "cell_idx": 53,
       "row_idx": 7,
       "group_idx": 2,
-      "parameter": "H2O2",
-      "is_color_cell": true,
-      "x": 458,
-      "y": 414,
-      "w": 45,
-      "h": 42,
+      "parameter": null,
+      "is_color_cell": false,
+      "x": 437,
+      "y": 385,
+      "w": 41,
+      "h": 39,
       "hsv_median": [
-        15.0,
-        60.0,
-        136.0
+        16.0,
+        52.0,
+        149.0
       ],
       "value": null
     },
     {
       "cell_idx": 54,
       "row_idx": 7,
-      "group_idx": 3,
-      "parameter": "PHMB",
+      "group_idx": 2,
+      "parameter": null,
       "is_color_cell": true,
-      "x": 513,
-      "y": 414,
-      "w": 80,
-      "h": 42,
+      "x": 488,
+      "y": 385,
+      "w": 73,
+      "h": 39,
       "hsv_median": [
-        21.0,
-        75.0,
-        118.0
+        20.0,
+        70.0,
+        124.0
       ],
       "value": null
     },
@@ -969,16 +951,16 @@
       "cell_idx": 55,
       "row_idx": 7,
       "group_idx": 3,
-      "parameter": "PHMB",
+      "parameter": null,
       "is_color_cell": false,
-      "x": 620,
-      "y": 414,
-      "w": 97,
-      "h": 42,
+      "x": 586,
+      "y": 385,
+      "w": 86,
+      "h": 39,
       "hsv_median": [
-        130.0,
-        13.0,
-        138.0
+        7.0,
+        23.0,
+        149.0
       ],
       "value": null
     }

@@ -16,16 +16,14 @@ import requests
 
 def extract_ocr_blocks_from_contours(image_path, output_json=None):
     """
-    Replicate contour_detection03.py logic to extract OCR blocks.
-    
-    This is a simplified version - use the actual contour_detection03 module for production.
+    Replicate contour_detection03.py logic to extract grid cells with OCR results.
     
     Args:
         image_path: Path to image file
         output_json: Optional path to save OCR blocks as JSON
     
     Returns:
-        List of OCR blocks: [{'text': str, 'x': int, 'y': int, 'w': int, 'h': int, 'score': float}, ...]
+        List of grid cells with OCR: [{'text': str, 'x': int, 'y': int, 'w': int, 'h': int, 'score': float}, ...]
     """
     # Load image
     image = cv2.imread(image_path)
@@ -68,11 +66,81 @@ def extract_ocr_blocks_from_contours(image_path, output_json=None):
     # Crop image
     cropped_image = image[y_min:y_max, x_min:x_max].copy()
     
-    # OCR processing
+    # Process cropped image for grid detection
+    gray_cropped = cv2.cvtColor(cropped_image, cv2.COLOR_BGR2GRAY)
+    gray_cropped = cv2.bilateralFilter(gray_cropped, 5, 200, 200)
+    clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8,8))
+    gray_cropped_enhanced = clahe.apply(gray_cropped)
+    canny_cropped = cv2.Canny(gray_cropped_enhanced, 30, 120)
+    contours_cropped, _ = cv2.findContours(canny_cropped, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    
+    # Get individual cell rectangles
+    rects_cropped = []
+    for cnt in contours_cropped:
+        if cv2.contourArea(cnt) < 500:
+            continue
+        epsilon = 0.02 * cv2.arcLength(cnt, True)
+        approx = cv2.approxPolyDP(cnt, epsilon, True)
+        if len(approx) == 4 and cv2.isContourConvex(approx):
+            x, y, w, h = cv2.boundingRect(approx)
+            rects_cropped.append((x, y, w, h))
+    
+    # Group into rows and columns to create grid
+    def group_rects_by_axis(rects, axis=1, tol=20):
+        rects_sorted = sorted(rects, key=lambda r: r[axis])
+        groups = []
+        for r in rects_sorted:
+            placed = False
+            for g in groups:
+                if abs(g[0][axis] - r[axis]) < tol:
+                    g.append(r)
+                    placed = True
+                    break
+            if not placed:
+                groups.append([r])
+        return groups
+    
+    def group_columns(rects, tol=20):
+        rects_sorted = sorted(rects, key=lambda r: r[0])
+        columns = []
+        for r in rects_sorted:
+            placed = False
+            for col in columns:
+                if abs(col[0][0] - r[0]) < tol:
+                    col.append(r)
+                    placed = True
+                    break
+            if not placed:
+                columns.append([r])
+        return columns
+    
+    # Create grid
+    rows = group_rects_by_axis(rects_cropped, axis=1, tol=20)
+    for row in rows:
+        row.sort(key=lambda r: r[0])
+    columns = group_columns(rects_cropped, tol=20)
+    
+    if not columns:
+        raise ValueError("No grid columns detected")
+    
+    col_positions = [min(r[0] for r in col) for col in columns]
+    col_widths = [max(r[2] for r in col) for col in columns]
+    row_positions = [min(r[1] for r in row) for row in rows]
+    row_heights = [max(r[3] for r in row) for row in rows]
+    
+    # Create grid cells
+    rects_grid = []
+    for row_idx, rh in enumerate(row_heights):
+        y_pos = row_positions[row_idx]
+        for col_idx, cw in enumerate(col_widths):
+            x_pos = col_positions[col_idx]
+            rects_grid.append((x_pos, y_pos, cw, rh))
+    
+    # OCR processing on cropped image
     ocr = OpenOCR(backend='onnx', device='cpu')
     ocr_image = cv2.cvtColor(cropped_image, cv2.COLOR_BGR2GRAY)
     
-    # Save temp file for OCR (use proper Windows/Linux temp path)
+    # Save temp file for OCR
     import tempfile
     import os
     
@@ -86,7 +154,6 @@ def extract_ocr_blocks_from_contours(image_path, output_json=None):
         print(f"Warning: OCR processing failed: {e}")
         result = []
     finally:
-        # Clean up temp file
         try:
             os.unlink(temp_path)
         except:
@@ -95,18 +162,51 @@ def extract_ocr_blocks_from_contours(image_path, output_json=None):
     # Parse OCR results
     ocr_blocks = parse_ocr_result(result)
     
-    # Adjust coordinates to original image space
-    for block in ocr_blocks:
-        block['x'] += x_min
-        block['y'] += y_min
+    # Assign OCR results to grid cells
+    grid_top = min(r[1] for r in rects_grid) if rects_grid else 0
     
-    # Save if requested
+    # Separate header and value blocks
+    ocr_values = [b for b in ocr_blocks if b['y'] + b['h'] // 2 >= grid_top]
+    
+    # Assign values to grid cells by position
+    grid_cells = []
+    for idx, (x, y, w, h) in enumerate(rects_grid):
+        # Find OCR blocks that overlap with this grid cell
+        cell_center_x = x + w // 2
+        cell_center_y = y + h // 2
+        
+        best_block = None
+        best_distance = float('inf')
+        
+        for block in ocr_values:
+            block_center_x = block['x'] + block['w'] // 2
+            block_center_y = block['y'] + block['h'] // 2
+            
+            # Check if block center is within cell bounds
+            if (x <= block_center_x <= x + w and 
+                y <= block_center_y <= y + h):
+                distance = ((block_center_x - cell_center_x) ** 2 + 
+                           (block_center_y - cell_center_y) ** 2) ** 0.5
+                if distance < best_distance:
+                    best_distance = distance
+                    best_block = block
+        
+        # Create grid cell entry
+        cell_data = {
+            'text': best_block['text'] if best_block else '',
+            'x': x + x_min,  # Adjust to original image coordinates
+            'y': y + y_min,
+            'w': w,
+            'h': h,
+            'score': best_block['score'] if best_block else 0.0
+        }
+        grid_cells.append(cell_data)
+    
     if output_json:
         with open(output_json, 'w') as f:
-            json.dump(ocr_blocks, f, indent=2)
-        print(f"✅ OCR blocks saved to {output_json}")
+            json.dump(grid_cells, f, indent=2)
     
-    return ocr_blocks
+    return grid_cells
 
 
 def parse_ocr_result(result):

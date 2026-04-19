@@ -134,6 +134,12 @@ class OCREditor {
             this.canvas.addEventListener('touchend', (e) => this.handleCanvasMouseUp(e));
         }
 
+        // ROI overlay canvas for clicking on grid cells
+        if (this.roiOverlayCanvas) {
+            this.roiOverlayCanvas.addEventListener('click', (e) => this.handleROIOverlayClick(e));
+            this.roiOverlayCanvas.style.cursor = 'pointer';
+        }
+
         // ROI buttons
         if (this.clearRoisBtn) this.clearRoisBtn.addEventListener('click', () => this.clearROIs());
         if (this.processOcrAutoBtn) this.processOcrAutoBtn.addEventListener('click', () => this.processOCRAuto());
@@ -336,11 +342,39 @@ class OCREditor {
         }
     }
 
+    handleROIOverlayClick(e) {
+        // Handle clicks on the ROI overlay to edit grid cells
+        if (!this.roiOverlayCanvas || !this.originalImageWidth || !this.originalImageHeight) return;
+        
+        const rect = this.roiOverlayCanvas.getBoundingClientRect();
+        const x = e.clientX - rect.left;
+        const y = e.clientY - rect.top;
+        
+        // Convert canvas coordinates back to original image coordinates
+        const scaleX = this.originalImageWidth / this.roiOverlayCanvas.width;
+        const scaleY = this.originalImageHeight / this.roiOverlayCanvas.height;
+        const originalX = x * scaleX;
+        const originalY = y * scaleY;
+        
+        // Find which ROI was clicked
+        for (let i = 0; i < this.results.length; i++) {
+            const result = this.results[i];
+            if (!result.roi || result.roi.length < 4) continue;
+            
+            const [x1, y1, x2, y2] = result.roi;
+            if (originalX >= x1 && originalX <= x2 && originalY >= y1 && originalY <= y2) {
+                // Found the clicked cell, open edit modal
+                this.openModal(i, result.text || '');
+                break;
+            }
+        }
+    }
+
     // ========== CANVAS & ROI ==========
     renderCanvas() {
-        this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+        if (!this.ctx || !this.currentImage) return;
 
-        // Draw image
+        this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
         this.ctx.drawImage(
             this.currentImage,
             0, 0,
@@ -577,8 +611,8 @@ class OCREditor {
             
             card.innerHTML = `
                 <div class="result-header-enhanced">
-                    <span class="result-label">OCR:</span>
-                    <span style="flex: 1; font-weight: bold; color: #333;">"${this.escapeHtml(originalText)}"</span>
+                    <span class="result-label">Cell ${originalIndex + 1}:</span>
+                    <span style="flex: 1; font-weight: bold; color: #333;">${this.escapeHtml(originalText || '(empty)')}</span>
                     ${result.is_corrected ? '<span style="font-size: 0.8em; color: #10b981;">✓ Edited</span>' : ''}
                 </div>
                 
@@ -602,6 +636,14 @@ class OCREditor {
             const input = card.querySelector('.result-input-enhanced');
             const clearBtn = card.querySelector('.result-clear-btn');
             const resetBtn = card.querySelector('.result-reset-btn');
+            
+            // Add click handler to the entire card for editing
+            card.addEventListener('click', (e) => {
+                // Don't trigger if clicking on buttons or input
+                if (e.target.tagName !== 'BUTTON' && e.target.tagName !== 'INPUT') {
+                    this.openModal(originalIndex, result.text || '');
+                }
+            });
             
             // Hover highlighting on image
             card.addEventListener('mouseenter', () => {
@@ -665,7 +707,7 @@ class OCREditor {
     }
     
     drawROIOverlay() {
-        // Draw ROI boxes on the overlay canvas
+        // Draw grid cell boxes on the overlay canvas with OCR text inside
         if (!this.roiOverlayCanvas || !this.roiOverlayCtx || !this.reviewCanvas) return;
         
         const canvas = this.roiOverlayCanvas;
@@ -687,7 +729,7 @@ class OCREditor {
             '#F7DC6F', '#BB8FCE', '#85C1E2', '#F8B88B', '#52C4A0'
         ];
         
-        // Draw ROI boxes
+        // Draw grid cell boxes
         this.results.forEach((result, index) => {
             if (!result.roi || result.roi.length < 4) return;
             
@@ -699,26 +741,41 @@ class OCREditor {
             
             const color = colors[index % colors.length];
             
-            // Draw box
+            // Draw box outline
             ctx.strokeStyle = color;
-            ctx.lineWidth = 3;
+            ctx.lineWidth = 2;
             ctx.strokeRect(x, y, w, h);
             
             // Draw semi-transparent fill
-            ctx.fillStyle = color + '22';
+            ctx.fillStyle = color + '15';  // Very light fill
             ctx.fillRect(x, y, w, h);
             
-            // Draw label badge with recognized OCR text
-            const overlayText = (result.text || result.corrected_text || String(index + 1)).toString().trim();
-            const badgeText = overlayText.length > 10 ? overlayText.substring(0, 10) + '…' : overlayText;
-            ctx.fillStyle = color;
-            ctx.font = 'bold 14px Arial';
-            const textWidth = ctx.measureText(badgeText).width + 16;
-            ctx.fillRect(x - 8, y - 24, textWidth, 20);
-            ctx.fillStyle = 'white';
-            ctx.textAlign = 'left';
-            ctx.textBaseline = 'middle';
-            ctx.fillText(badgeText, x, y - 14);
+            // Draw OCR text inside the box
+            const displayText = (result.corrected_text || result.text || '').trim();
+            if (displayText) {
+                ctx.fillStyle = '#000000';
+                ctx.font = 'bold 12px Arial';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                
+                // Fit text to box width
+                let fontSize = 12;
+                let textWidth = ctx.measureText(displayText).width;
+                while (textWidth > w - 8 && fontSize > 8) {
+                    fontSize--;
+                    ctx.font = `bold ${fontSize}px Arial`;
+                    textWidth = ctx.measureText(displayText).width;
+                }
+                
+                ctx.fillText(displayText, x + w/2, y + h/2);
+            } else {
+                // Draw placeholder for empty cells
+                ctx.fillStyle = '#666666';
+                ctx.font = 'italic 10px Arial';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText('Click to edit', x + w/2, y + h/2);
+            }
         });
     }
     
@@ -763,10 +820,16 @@ class OCREditor {
     // ========== MODAL EDITING ==========
     openModal(index, originalText) {
         this.editingIndex = index;
-        this.editOriginal.value = originalText;
-        this.editCorrected.value = this.results[index].corrected_text || originalText;
+        const result = this.results[index];
+        const currentText = result.corrected_text || result.text || '';
+        
+        this.editOriginal.value = originalText || '(empty)';
+        this.editCorrected.value = currentText;
         this.editModal.classList.remove('hidden');
+        
+        // Focus on the input field
         this.editCorrected.focus();
+        this.editCorrected.select();
     }
 
     closeModal() {

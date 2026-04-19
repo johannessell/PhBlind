@@ -32,9 +32,9 @@ def capture_reference_photo(cap, scale):
         if key == ord('q'):
             return None
 
-cap = cv2.VideoCapture(1)
+# cap = cv2.VideoCapture(1)
 
-image = capture_reference_photo(cap, 1)
+# image = capture_reference_photo(cap, 1)
 
 if image is None:
     raise Exception("Bild konnte nicht geladen werden!")
@@ -411,11 +411,11 @@ for (idx, x, y, w, h, H, S, V) in grid_hsv_stats:
     )
 
 ## OCR
-ocr = OpenOCR(backend='onnx', device='cpu')
-ocr_image = cv2.cvtColor(cropped_image, cv2.COLOR_BGR2GRAY)
-cv2.imwrite('tmp.jpg', ocr_image)
-
-result, elapse = ocr('tmp.jpg')
+# Parameter für bessere Erkennung:
+# drop_score: Schwellenwert für Erkennungskonfidenz (0.0-1.0, niedriger = mehr Treffer)
+# mode: 'mobile' für schnell, 'server' für genau
+import os
+model_dir = os.path.expanduser('~/.cache/openocr/')
 
 # Ergebnis parsen: result[0] = "dateiname\t[{...JSON...}]"
 import json, re
@@ -446,7 +446,47 @@ def parse_ocr_result(result):
             blocks.append({'text': text, 'x': x, 'y': y, 'w': w, 'h': h, 'score': score})
     return blocks
 
-ocr_blocks = parse_ocr_result(result)
+# Mehrere OCR-Läufe mit verschiedenen Vorverarbeitungen
+def run_multi_ocr(image):
+    """Führt OCR mit mehreren Vorverarbeitungsvarianten aus"""
+    all_blocks = []
+
+    # Variante 1: Original (einfach)
+    gray1 = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    cv2.imwrite('tmp1.jpg', gray1)
+    ocr1 = OpenOCR(backend='onnx', device='cpu', drop_score=0.5, mode='mobile',
+                   onnx_det_model_path=os.path.join(model_dir, 'openocr_det_model.onnx'),
+                   onnx_rec_model_path=os.path.join(model_dir, 'openocr_rec_model.onnx'))
+    result1, _ = ocr1('tmp1.jpg')
+    all_blocks.extend(parse_ocr_result(result1))
+
+    # Variante 2: Mit CLAHE
+    gray2 = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8,8))
+    enhanced = clahe.apply(gray2)
+    cv2.imwrite('tmp2.jpg', enhanced)
+    ocr2 = OpenOCR(backend='onnx', device='cpu', drop_score=0.4, mode='server',
+                   onnx_det_model_path=os.path.join(model_dir, 'openocr_det_model.onnx'),
+                   onnx_rec_model_path=os.path.join(model_dir, 'openocr_rec_model.onnx'))
+    result2, _ = ocr2('tmp2.jpg')
+    all_blocks.extend(parse_ocr_result(result2))
+
+    # Entferne Duplikate (gleiche Position ±5px)
+    unique_blocks = []
+    for block in all_blocks:
+        is_duplicate = False
+        for existing in unique_blocks:
+            if (abs(block['x'] - existing['x']) < 5 and
+                abs(block['y'] - existing['y']) < 5 and
+                abs(block['w'] - existing['w']) < 5):
+                is_duplicate = True
+                break
+        if not is_duplicate:
+            unique_blocks.append(block)
+
+    return unique_blocks
+
+ocr_blocks = run_multi_ocr(cropped_image)
 
 # Grenze zwischen Kopfbereich (Parameter-Namen) und Grid (Messwerte)
 # = y-Position der obersten Grid-Zeile

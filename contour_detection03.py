@@ -168,30 +168,47 @@ def classify_and_group_columns(columns, hsv_image, max_group_distance=150):
     col_stats = {}
     for i, col_rects in enumerate(columns):
         hue_vals, sat_vals = [], []
+        cell_sat_medians = []
         for (x, y, w, h) in col_rects:
             roi = hsv_image[y:y+h, x:x+w]
             if roi.size > 0:
                 hue_vals.extend(roi[:, :, 0].flatten().tolist())
                 sat_vals.extend(roi[:, :, 1].flatten().tolist())
+                cell_sat_medians.append(float(np.median(roi[:, :, 1])))
         col_stats[i] = {
             'hue_median': float(np.median(hue_vals)) if hue_vals else 0.0,
             'sat_median': float(np.median(sat_vals)) if sat_vals else 0.0,
             'hue_iqr': float(np.percentile(hue_vals, 75) - np.percentile(hue_vals, 25))
                        if len(hue_vals) >= 4 else 0.0,
+            # Maximale Zellen-Median-Saettigung: robust gegen Spalten mit
+            # einigen blassen Reihen (z.B. Label- und Randreihen), in denen
+            # sat_median zu niedrig ausfaellt, obwohl mittlere Reihen echte
+            # Farb-Swatches enthalten.
+            'cell_sat_max': max(cell_sat_medians) if cell_sat_medians else 0.0,
+            'cell_sat_p75': float(np.percentile(cell_sat_medians, 75))
+                            if len(cell_sat_medians) >= 4 else
+                            (max(cell_sat_medians) if cell_sat_medians else 0.0),
         }
 
-    # Schritt 1: Measure-Spalten identifizieren (nur transparente Spalten = niedrige Sättigung)
+    # Schritt 1: Measure-Spalten identifizieren.
+    # Regel: Enthaelt die Spalte mindestens eine Zelle mit hoher Median-
+    # Saettigung (>= 70), ist es eine Farb-Spalte. Measure-/Label-Spalten
+    # zeigen ueber ALLE Reihen blasse Sat-Mediane; pooled sat_median ist
+    # unzuverlaessig, weil einige Label- und Randreihen innerhalb einer
+    # Farbspalte die Mediansaettigung unter 60 druecken koennen
+    # (z.B. PHMB-Swatch-Spalte mit blasser oberster und unterster Zeile).
     col_types = {}
     measure_cols = []
     color_cols = []
 
+    COLOR_SAT_MAX = 70.0
     for i, s in col_stats.items():
-        if s['sat_median'] < 60.0:  # Zurück zu 60.0
-            col_types[i] = 'measure'
-            measure_cols.append(i)
-        else:
+        if s['cell_sat_max'] >= COLOR_SAT_MAX:
             col_types[i] = 'color'
             color_cols.append(i)
+        else:
+            col_types[i] = 'measure'
+            measure_cols.append(i)
 
     # Schritt 2: Gruppen bilden basierend auf räumlicher Nähe
     # Jede Gruppe muss mindestens eine measure- und eine color-Spalte haben

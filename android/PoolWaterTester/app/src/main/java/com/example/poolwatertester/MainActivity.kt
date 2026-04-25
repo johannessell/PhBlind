@@ -61,10 +61,20 @@ class MainActivity : AppCompatActivity() {
         val py = Python.getInstance()
         analyzer = py.getModule("analyzer")
         measurement = py.getModule("measurement")
+        val refDir = java.io.File(filesDir, "reference").apply { mkdirs() }
+        try {
+            val info = measurement.callAttr("init", refDir.absolutePath)
+            Log.i(TAG, "measurement init: $info")
+        } catch (e: Exception) {
+            Log.e(TAG, "measurement init failed", e)
+        }
         cameraExecutor = Executors.newSingleThreadExecutor()
 
         binding.measureButton.setOnClickListener {
             if (locked) resetState() else runMeasurement()
+        }
+        binding.editReferenceButton.setOnClickListener {
+            startActivity(android.content.Intent(this, ReferenceActivity::class.java))
         }
 
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA)

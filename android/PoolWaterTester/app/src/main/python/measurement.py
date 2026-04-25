@@ -2,9 +2,13 @@
 On-device measurement pipeline.
 
 Lifecycle:
-  - Module import loads reference.json + template02.jpg from this dir.
-  - Kotlin calls measure_rgba(rgba_bytes, width, height) on a captured frame.
-  - Returns {found, results, quad} as a plain dict (Chaquopy converts to Java).
+  - Kotlin calls init(data_dir) after Python.start(). Data dir is the
+    app's private filesDir/reference. If it contains reference.json +
+    template.jpg, those are used; otherwise the bundled files next to
+    this module are used as fallback.
+  - Kotlin then calls find_quad_y / measure_rgba per frame.
+  - After the user saves a new reference, Kotlin calls init(data_dir)
+    again to reload.
 """
 
 import json
@@ -18,14 +22,60 @@ from tracker import IndicatorTracker, QuadStabilityChecker
 _HERE = os.path.dirname(__file__)
 _STABILITY = QuadStabilityChecker(required_frames=5, max_drift=20.0)
 
-with open(os.path.join(_HERE, 'reference.json'), 'r', encoding='utf-8') as _f:
-    _REF = json.load(_f)
+_REF: dict = {}
+_TEMPLATE = None
+_TEMPLATE_GRAY = None
+_TRACKER: IndicatorTracker = None  # type: ignore[assignment]
+_LOADED_FROM: str = ''
 
-_TEMPLATE = cv2.imread(os.path.join(_HERE, 'template02.jpg'))
-if _TEMPLATE is None:
-    raise RuntimeError("template02.jpg konnte nicht geladen werden")
-_TEMPLATE_GRAY = cv2.cvtColor(_TEMPLATE, cv2.COLOR_BGR2GRAY)
-_TRACKER = IndicatorTracker(_TEMPLATE_GRAY)
+
+def _resolve_paths(data_dir: str):
+    """Prefer filesDir assets, fall back to bundled files in _HERE."""
+    if data_dir:
+        cand_ref = os.path.join(data_dir, 'reference.json')
+        cand_tpl = os.path.join(data_dir, 'template.jpg')
+        if os.path.exists(cand_ref) and os.path.exists(cand_tpl):
+            return cand_ref, cand_tpl, 'filesDir'
+    return (os.path.join(_HERE, 'reference.json'),
+            os.path.join(_HERE, 'template02.jpg'),
+            'bundled')
+
+
+def init(data_dir: str = '') -> dict:
+    """
+    (Re)load reference.json + template from data_dir (filesDir) or bundled.
+    Safe to call multiple times; resets the stability buffer.
+    """
+    global _REF, _TEMPLATE, _TEMPLATE_GRAY, _TRACKER, _LOADED_FROM
+
+    ref_path, tpl_path, source = _resolve_paths(data_dir)
+    with open(ref_path, 'r', encoding='utf-8') as f:
+        ref = json.load(f)
+    img = cv2.imread(tpl_path)
+    if img is None:
+        raise RuntimeError(f"Template nicht gefunden: {tpl_path}")
+
+    _REF = ref
+    _TEMPLATE = img
+    _TEMPLATE_GRAY = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+    _TRACKER = IndicatorTracker(_TEMPLATE_GRAY)
+    _STABILITY.reset()
+    _LOADED_FROM = source
+
+    return {
+        'source': source,
+        'ref_path': ref_path,
+        'tpl_path': tpl_path,
+        'width': int(_TEMPLATE.shape[1]),
+        'height': int(_TEMPLATE.shape[0]),
+        'n_cells': len(_REF.get('cells', [])),
+        'parameters': [p.get('name') for p in _REF.get('parameters', [])],
+    }
+
+
+# Load bundled defaults eagerly so the module is usable even if Kotlin
+# forgets to call init().
+init('')
 
 
 def _measure_warped(warped: np.ndarray) -> dict:

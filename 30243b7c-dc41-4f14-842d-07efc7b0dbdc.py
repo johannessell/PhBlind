@@ -116,25 +116,16 @@ def _drop_nested(cells):
     return keep
 
 
-def compute_edges(gray: np.ndarray, debug_dir: Optional[str] = None) -> np.ndarray:
-    """Einmalige Edge-Berechnung — wird sowohl von Zellen-Detection als auch
-    von der Hough-Verfeinerung wiederverwendet.
-    """
-    filtered = cv2.bilateralFilter(gray, 5, 200, 200)
-    clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
-    enhanced = clahe.apply(filtered)
-    edges = cv2.Canny(enhanced, 30, 90)
-    if debug_dir:
-        cv2.imwrite(os.path.join(debug_dir, '20_edges.jpg'), edges)
-    return edges
-
-
-def detect_cell_rects(edges: np.ndarray, debug_dir: Optional[str] = None) -> List[Tuple[int, int, int, int, float, float]]:
+def detect_cell_rects(gray: np.ndarray, debug_dir: Optional[str] = None) -> List[Tuple[int, int, int, int, float, float]]:
     """Finde alle quadratischen/rechteckigen kleinen Konturen.
 
-    Erwartet vorberechnetes Canny-Edge-Bild (compute_edges()).
     Rueckgabe: Liste von (cx, cy, w, h, area, angle_deg).
+    angle_deg ist der Winkel der laengeren Kante zur x-Achse (-45..45).
     """
+    gray = cv2.bilateralFilter(gray, 5, 200, 200)
+    clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
+    enhanced = clahe.apply(gray)
+    edges = cv2.Canny(enhanced, 30, 90)
     # Schliesse kleine Luecken in Zellumrandungen (z.B. wenn Text die
     # Zellrahmenlinie unterbricht), damit findContours die Zelle als
     # geschlossenes Polygon liefert.
@@ -142,11 +133,12 @@ def detect_cell_rects(edges: np.ndarray, debug_dir: Optional[str] = None) -> Lis
                                     np.ones((5, 5), np.uint8), iterations=1)
 
     if debug_dir:
+        cv2.imwrite(os.path.join(debug_dir, '20_edges.jpg'), edges)
         cv2.imwrite(os.path.join(debug_dir, '20b_edges_closed.jpg'), edges_closed)
 
     contours, _ = cv2.findContours(edges_closed, cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
 
-    h, w = edges.shape
+    h, w = gray.shape
     frame_area = float(h * w)
     min_cell = frame_area * 0.0001
     max_cell = frame_area * 0.02
@@ -235,14 +227,15 @@ def filter_by_size(cells, tolerance: float = 0.40, n_bins: int = 20):
     return [c for c in cells if lo <= c[3] <= hi]
 
 
-def refine_quad_via_hough(gray: np.ndarray, edges_full: np.ndarray, cells,
-                          card_angle_deg: float, margin: int = 100,
+def refine_quad_via_hough(gray: np.ndarray, cells, card_angle_deg: float,
+                          margin: int = 100,
                           debug_dir: Optional[str] = None) -> Optional[np.ndarray]:
     """ROI um Zellen + HoughLines -> 4 dominante Linien -> Schnittpunkte = Eckpunkte.
 
-    Wiederverwendet das Canny-Edge-Bild aus compute_edges() — kein zweiter
-    Canny-Aufruf noetig. HoughLinesP mittelt ueber Lueeken hinweg und liefert
-    die 4 Karten-Geraden, deren Schnittpunkte die Kartenecken sind.
+    Cannys Kantenring um die Karte ist optisch geschlossen, aber numerisch
+    luckenhaft -> findContours findet keine geschlossene Kontur. HoughLines
+    mittelt ueber die Lueeken hinweg und liefert die 4 echten Geraden, deren
+    Schnittpunkte die Kartenecken sind.
     """
     if not cells:
         return None
@@ -258,9 +251,11 @@ def refine_quad_via_hough(gray: np.ndarray, edges_full: np.ndarray, cells,
     y1 = min(h_img, max(ys) + half_cell + margin)
 
     crop = gray[y0:y1, x0:x1]
-    edges = edges_full[y0:y1, x0:x1]
-    if crop.size == 0 or edges.size == 0:
+    if crop.size == 0:
         return None
+
+    blurred = cv2.GaussianBlur(crop, (5, 5), 0)
+    edges = cv2.Canny(blurred, 30, 90)
 
     if debug_dir:
         vis_roi = cv2.cvtColor(gray, cv2.COLOR_GRAY2BGR)
@@ -365,12 +360,14 @@ def refine_quad_via_hough(gray: np.ndarray, edges_full: np.ndarray, cells,
                 vertical_right.append((x1, y1, x2, y2, seg_angle, rx))
                 accepted.append(('right', x1, y1, x2, y2))
 
-    have_all_sides = bool(horizontal_top and horizontal_bottom
-                          and vertical_left and vertical_right)
-    top = min(horizontal_top, key=lambda l: l[5]) if horizontal_top else None
-    bottom = max(horizontal_bottom, key=lambda l: l[5]) if horizontal_bottom else None
-    left = min(vertical_left, key=lambda l: l[5]) if vertical_left else None
-    right = max(vertical_right, key=lambda l: l[5]) if vertical_right else None
+    if not (horizontal_top and horizontal_bottom and vertical_left and vertical_right):
+        return None
+
+    # Aus jeder Seite die aeusserste Linie waehlen.
+    top = min(horizontal_top, key=lambda l: l[5])
+    bottom = max(horizontal_bottom, key=lambda l: l[5])
+    left = min(vertical_left, key=lambda l: l[5])
+    right = max(vertical_right, key=lambda l: l[5])
 
     if debug_dir:
         vis_lines = cv2.cvtColor(crop, cv2.COLOR_GRAY2BGR)
@@ -382,17 +379,11 @@ def refine_quad_via_hough(gray: np.ndarray, edges_full: np.ndarray, cells,
         for side, x1, y1, x2, y2 in accepted:
             cv2.line(vis_lines, (int(x1), int(y1)), (int(x2), int(y2)),
                      side_color[side], 2)
-        chosen_lines = [(top, (0, 0, 255)), (bottom, (0, 0, 255)),
-                        (left, (255, 0, 255)), (right, (255, 0, 255))]
-        for chosen, color in chosen_lines:
-            if chosen is None:
-                continue
+        for chosen, color in [(top, (0, 0, 255)), (bottom, (0, 0, 255)),
+                              (left, (255, 0, 255)), (right, (255, 0, 255))]:
             x1, y1, x2, y2 = chosen[0], chosen[1], chosen[2], chosen[3]
             cv2.line(vis_lines, (int(x1), int(y1)), (int(x2), int(y2)), color, 3)
         cv2.imwrite(os.path.join(debug_dir, '26b_hough.jpg'), vis_lines)
-
-    if not have_all_sides:
-        return None
 
     def _line_intersect(l1, l2):
         # l = (x1, y1, x2, y2, ...). Parametrisch: P = A + t*(B-A); Q = C + u*(D-C)
@@ -433,8 +424,7 @@ def refine_quad_via_hough(gray: np.ndarray, edges_full: np.ndarray, cells,
 
 def detect_card_quad(gray: np.ndarray, debug_dir: Optional[str] = None) -> Optional[np.ndarray]:
     """Hauptfunktion: gray -> 4 Eckpunkte (TL,TR,BR,BL)."""
-    edges = compute_edges(gray, debug_dir)
-    cells = detect_cell_rects(edges, debug_dir)
+    cells = detect_cell_rects(gray, debug_dir)
     if debug_dir:
         vis = cv2.cvtColor(gray, cv2.COLOR_GRAY2BGR)
         for cx, cy, w, h, _, _ in cells:
@@ -519,12 +509,8 @@ def detect_card_quad(gray: np.ndarray, debug_dir: Optional[str] = None) -> Optio
     # Stage 24-27: Verfeinerung — innerhalb einer ROI um die Zellen
     # die 4 Kartengeraden per HoughLines bestimmen, mit Linien-Richtungen
     # gefiltert auf die Zell-Orientierung (Karten-Kanten parallel zu Zellen).
-    # Margin skaliert mit der Bildgroesse — ein 4K-Foto braucht mehr Pixel
-    # Spielraum als ein 720p-Bild, sonst quetscht der Crop die Kartenkante.
-    src_short = min(gray.shape[:2])
-    roi_margin = max(100, src_short // 8)
-    refined = refine_quad_via_hough(gray, edges, cluster, card_angle_deg=angle_deg,
-                                    margin=roi_margin, debug_dir=debug_dir)
+    refined = refine_quad_via_hough(gray, cluster, card_angle_deg=angle_deg,
+                                    margin=100, debug_dir=debug_dir)
     if refined is not None:
         if debug_dir:
             vis = cv2.cvtColor(gray, cv2.COLOR_GRAY2BGR)

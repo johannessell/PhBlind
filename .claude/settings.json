@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(//c/Users/johan/.claude/projects/c--Users-johan-PycharmProjects-PhBlind/**)",
+      "Read(//tmp/**)"
+    ]
+  }
+}

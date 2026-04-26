@@ -17,7 +17,8 @@ Returns ein Dict, das die ReferenceActivity + ML Kit weiterverarbeiten:
   compute_best_channels aufrufen.
 """
 
-from typing import Optional
+import math
+from typing import List, Optional, Tuple
 
 import cv2
 import numpy as np
@@ -33,175 +34,427 @@ GROUP_MAX_DISTANCE_FRAC = 0.22  # relative to canonical_width
 # Quad-Erkennung auf der Referenz
 # ----------------------------------------------------------
 
-def _touches_border(cnt, w, h, margin=3):
-    pts = cnt.reshape(-1, 2)
-    return bool(np.any(pts[:, 0] <= margin) or np.any(pts[:, 0] >= w - 1 - margin)
-                or np.any(pts[:, 1] <= margin) or np.any(pts[:, 1] >= h - 1 - margin))
+def _dedupe_cells(cells, center_tol_factor: float = 0.3, size_tol: float = 0.25):
+    """Verwerfe Duplikate: zwei Zellen am gleichen Zentrum mit aehnlicher Groesse.
+
+    findContours liefert oft sowohl die Aussen- als auch Innenkante eines
+    Zellrahmens — beide ergeben fast deckungsgleiche minAreaRect-Boxen.
+    Wir behalten pro Cluster den groesseren Eintrag (=Aussenkontur).
+    """
+    if len(cells) < 2:
+        return cells
+    sorted_cells = sorted(cells, key=lambda c: c[2] * c[3], reverse=True)
+    keep = []
+    for c in sorted_cells:
+        cx, cy, w, h, _, _ = c
+        center_tol = max(w, h) * center_tol_factor
+        is_dup = False
+        for k in keep:
+            kx, ky, kw, kh, _, _ = k
+            if (abs(kx - cx) <= center_tol and abs(ky - cy) <= center_tol
+                    and abs(kw - w) <= max(kw, w) * size_tol
+                    and abs(kh - h) <= max(kh, h) * size_tol):
+                is_dup = True
+                break
+        if not is_dup:
+            keep.append(c)
+    return keep
 
 
-def _score_quad(cnt, frame_area, frame_w, frame_h):
-    """Score a contour. Returns (score, reason). score<=0 means rejected."""
-    area = cv2.contourArea(cnt)
-    area_frac = area / frame_area
-    if area_frac < 0.05:
-        return -1.0, f'small({area_frac:.2f})'
-    if area_frac > 0.95:
-        return -1.0, f'huge({area_frac:.2f})'
-    if _touches_border(cnt, frame_w, frame_h):
-        return -1.0, 'border'
-    rect = cv2.minAreaRect(cnt)
+def _drop_nested(cells):
+    """Entferne Zellen, die komplett in einer groesseren Zelle liegen.
+
+    Innenstrukturen wie Zahlen/Text in einer Zelle erzeugen eigene Konturen;
+    deren minAreaRect liegt mittig in der echten Zelle.
+    """
+    if len(cells) < 2:
+        return cells
+    sorted_cells = sorted(cells, key=lambda c: c[2] * c[3], reverse=True)
+    keep = []
+    for c in sorted_cells:
+        cx, cy, w, h, _, _ = c
+        nested = False
+        for k in keep:
+            kx, ky, kw, kh, _, _ = k
+            if (kw * kh > w * h * 1.2
+                    and kx - kw / 2 <= cx <= kx + kw / 2
+                    and ky - kh / 2 <= cy <= ky + kh / 2):
+                nested = True
+                break
+        if not nested:
+            keep.append(c)
+    return keep
+
+
+def _compute_edges(gray: np.ndarray) -> np.ndarray:
+    """Einmalige Edge-Berechnung — wird sowohl von Zell-Detection als auch
+    von der Hough-Verfeinerung wiederverwendet.
+    """
+    filtered = cv2.bilateralFilter(gray, 5, 200, 200)
+    clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
+    enhanced = clahe.apply(filtered)
+    edges = cv2.Canny(enhanced, 30, 90)
+    _debug_save('20_edges.jpg', edges)
+    return edges
+
+
+def _detect_cell_rects(edges: np.ndarray) -> List[Tuple[int, int, int, int, float, float]]:
+    """Finde alle quadratischen/rechteckigen kleinen Konturen.
+
+    Rueckgabe: Liste von (cx, cy, w, h, area, angle_deg).
+    """
+    edges_closed = cv2.morphologyEx(edges, cv2.MORPH_CLOSE,
+                                    np.ones((5, 5), np.uint8), iterations=1)
+    _debug_save('20b_edges_closed.jpg', edges_closed)
+
+    contours, _ = cv2.findContours(edges_closed, cv2.RETR_LIST,
+                                   cv2.CHAIN_APPROX_SIMPLE)
+    h, w = edges.shape
+    frame_area = float(h * w)
+    min_cell = frame_area * 0.0001
+    max_cell = frame_area * 0.02
+
+    cells: List[Tuple[int, int, int, int, float, float]] = []
+    for cnt in contours:
+        area = cv2.contourArea(cnt)
+        if area < min_cell or area > max_cell:
+            continue
+        hull = cv2.convexHull(cnt)
+        rect = cv2.minAreaRect(hull)
+        rw, rh = rect[1]
+        if min(rw, rh) < 4:
+            continue
+        ar = max(rw, rh) / (min(rw, rh) + 1e-6)
+        if ar > 4.5:
+            continue
+        rect_area = rw * rh
+        if rect_area < 1:
+            continue
+        rectangularity = area / rect_area
+        if rectangularity < 0.6:
+            continue
+        ang = rect[2]
+        if rw < rh:
+            ang += 90.0
+        while ang > 45.0:
+            ang -= 90.0
+        while ang < -45.0:
+            ang += 90.0
+        cx, cy = rect[0]
+        long_side = max(rw, rh)
+        short_side = min(rw, rh)
+        cells.append((int(cx), int(cy), int(long_side), int(short_side),
+                      float(area), float(ang)))
+
+    cells = _dedupe_cells(cells)
+    cells = _drop_nested(cells)
+    return cells
+
+
+def _filter_dense_cells(cells, k_neighbors: int = 6, radius_factor: float = 2.5):
+    """Behalte nur Zellen mit >= k Nachbarn im Radius (skaliert mit Median-Zellgroesse)."""
+    if len(cells) < k_neighbors:
+        return []
+    pts = np.array([(c[0], c[1]) for c in cells], dtype=np.float32)
+    sizes = np.array([max(c[2], c[3]) for c in cells], dtype=np.float32)
+    median_size = float(np.median(sizes))
+    radius = max(median_size * radius_factor, 30.0)
+
+    keep_idx = []
+    for i, p in enumerate(pts):
+        dists = np.linalg.norm(pts - p, axis=1)
+        if int(np.sum(dists < radius)) >= k_neighbors:
+            keep_idx.append(i)
+    return [cells[i] for i in keep_idx]
+
+
+def _filter_cells_by_size(cells, tolerance: float = 0.40, n_bins: int = 20):
+    """Behalte nur Zellen, deren kurze Seite zum Histogramm-Modus passt.
+
+    Karten-Zellen sind alle gleich hoch; Streu-Rechtecke (Stiftehalter,
+    Monitorrahmen, Tastenkappen) haben i.d.R. andere Groessen.
+    """
+    if len(cells) < 4:
+        return cells
+    heights = np.array([c[3] for c in cells], dtype=np.float32)
+    hist, edges = np.histogram(heights, bins=n_bins)
+    mode_idx = int(np.argmax(hist))
+    mode_h = float(0.5 * (edges[mode_idx] + edges[mode_idx + 1]))
+    lo = mode_h * (1.0 - tolerance)
+    hi = mode_h * (1.0 + tolerance)
+    return [c for c in cells if lo <= c[3] <= hi]
+
+
+def _refine_quad_via_hough(gray: np.ndarray, edges_full: np.ndarray, cells,
+                           card_angle_deg: float, margin: int = 100) -> Optional[np.ndarray]:
+    """ROI um Zellen + HoughLines -> 4 dominante Linien -> Schnittpunkte = Eckpunkte."""
+    if not cells:
+        return None
+    h_img, w_img = gray.shape[:2]
+    xs = [c[0] for c in cells]
+    ys = [c[1] for c in cells]
+    sizes = [max(c[2], c[3]) for c in cells]
+    half_cell = int(np.median(sizes) // 2)
+
+    x0 = max(0, min(xs) - half_cell - margin)
+    y0 = max(0, min(ys) - half_cell - margin)
+    x1 = min(w_img, max(xs) + half_cell + margin)
+    y1 = min(h_img, max(ys) + half_cell + margin)
+
+    crop = gray[y0:y1, x0:x1]
+    edges = edges_full[y0:y1, x0:x1]
+    if crop.size == 0 or edges.size == 0:
+        return None
+
+    if _DEBUG_DIR:
+        vis_roi = cv2.cvtColor(gray, cv2.COLOR_GRAY2BGR)
+        cv2.rectangle(vis_roi, (x0, y0), (x1, y1), (255, 200, 0), 4)
+        _debug_save('24_roi.jpg', vis_roi)
+        _debug_save('25_crop.jpg', crop)
+        _debug_save('26_crop_edges.jpg', edges)
+
+    cell_short = float(np.median([min(c[2], c[3]) for c in cells]))
+    threshold = max(int(cell_short * 1.0), 30)
+    min_line_len = max(int(cell_short * 2.5), 50)
+    lines_p = cv2.HoughLinesP(edges, rho=1, theta=np.pi / 180,
+                              threshold=threshold,
+                              minLineLength=min_line_len,
+                              maxLineGap=10)
+    if lines_p is None or len(lines_p) < 4:
+        return None
+
+    card_angle_rad = np.deg2rad(card_angle_deg)
+    cos_t, sin_t = float(np.cos(card_angle_rad)), float(np.sin(card_angle_rad))
+    cell_pts_crop = np.array([(c[0] - x0, c[1] - y0) for c in cells], dtype=np.float32)
+    cell_centroid = cell_pts_crop.mean(axis=0)
+    R = np.array([[cos_t, sin_t], [-sin_t, cos_t]], dtype=np.float32)
+    rotated_cells = (cell_pts_crop - cell_centroid) @ R.T
+    cmin = rotated_cells.min(axis=0)
+    cmax = rotated_cells.max(axis=0)
+    pad = 0.5 * cell_short
+    inner_xmin = cmin[0] - pad
+    inner_xmax = cmax[0] + pad
+    inner_ymin = cmin[1] - pad
+    inner_ymax = cmax[1] + pad
+
+    def _to_card_frame(x, y):
+        dx = x - cell_centroid[0]
+        dy = y - cell_centroid[1]
+        return dx * cos_t + dy * sin_t, -dx * sin_t + dy * cos_t
+
+    def _is_inside_inner(x, y):
+        rx, ry = _to_card_frame(x, y)
+        return inner_xmin <= rx <= inner_xmax and inner_ymin <= ry <= inner_ymax
+
+    margin_lo = 0.3 * cell_short
+    margin_hi = 2.5 * cell_short
+
+    h_target = card_angle_rad % np.pi
+    v_target = (card_angle_rad + np.pi / 2) % np.pi
+    angle_tol = np.deg2rad(15)
+
+    def _ang_dist(a, b):
+        d = abs(a - b) % np.pi
+        return min(d, np.pi - d)
+
+    def _is_horizontal(seg_deg):
+        return seg_deg <= 15.0 or seg_deg >= 165.0
+
+    def _is_vertical(seg_deg):
+        return 75.0 <= seg_deg <= 105.0
+
+    horizontal_top, horizontal_bottom = [], []
+    vertical_left, vertical_right = [], []
+    accepted = []
+
+    for line in lines_p:
+        x1, y1, x2, y2 = (float(v) for v in line[0])
+        mx = (x1 + x2) * 0.5
+        my = (y1 + y2) * 0.5
+        if _is_inside_inner(mx, my):
+            continue
+
+        seg_angle = float(math.atan2(y2 - y1, x2 - x1)) % np.pi
+        seg_deg = np.degrees(seg_angle)
+        rx, ry = _to_card_frame(mx, my)
+
+        if _is_horizontal(seg_deg) and _ang_dist(seg_angle, h_target) < angle_tol:
+            if cmin[1] - margin_hi <= ry <= cmin[1] - margin_lo:
+                horizontal_top.append((x1, y1, x2, y2, seg_angle, ry))
+                accepted.append(('top', x1, y1, x2, y2))
+            elif cmax[1] + margin_lo <= ry <= cmax[1] + margin_hi:
+                horizontal_bottom.append((x1, y1, x2, y2, seg_angle, ry))
+                accepted.append(('bottom', x1, y1, x2, y2))
+        elif _is_vertical(seg_deg) and _ang_dist(seg_angle, v_target) < angle_tol:
+            if cmin[0] - margin_hi <= rx <= cmin[0] - margin_lo:
+                vertical_left.append((x1, y1, x2, y2, seg_angle, rx))
+                accepted.append(('left', x1, y1, x2, y2))
+            elif cmax[0] + margin_lo <= rx <= cmax[0] + margin_hi:
+                vertical_right.append((x1, y1, x2, y2, seg_angle, rx))
+                accepted.append(('right', x1, y1, x2, y2))
+
+    have_all_sides = bool(horizontal_top and horizontal_bottom
+                          and vertical_left and vertical_right)
+    top = min(horizontal_top, key=lambda l: l[5]) if horizontal_top else None
+    bottom = max(horizontal_bottom, key=lambda l: l[5]) if horizontal_bottom else None
+    left = min(vertical_left, key=lambda l: l[5]) if vertical_left else None
+    right = max(vertical_right, key=lambda l: l[5]) if vertical_right else None
+
+    if _DEBUG_DIR:
+        vis_lines = cv2.cvtColor(crop, cv2.COLOR_GRAY2BGR)
+        for line in lines_p:
+            lx1, ly1, lx2, ly2 = (int(v) for v in line[0])
+            cv2.line(vis_lines, (lx1, ly1), (lx2, ly2), (60, 60, 60), 1)
+        side_color = {'top': (0, 255, 0), 'bottom': (0, 255, 0),
+                      'left': (0, 200, 255), 'right': (0, 200, 255)}
+        for side, ax1, ay1, ax2, ay2 in accepted:
+            cv2.line(vis_lines, (int(ax1), int(ay1)), (int(ax2), int(ay2)),
+                     side_color[side], 2)
+        chosen_lines = [(top, (0, 0, 255)), (bottom, (0, 0, 255)),
+                        (left, (255, 0, 255)), (right, (255, 0, 255))]
+        for chosen, color in chosen_lines:
+            if chosen is None:
+                continue
+            cx1, cy1, cx2, cy2 = chosen[0], chosen[1], chosen[2], chosen[3]
+            cv2.line(vis_lines, (int(cx1), int(cy1)), (int(cx2), int(cy2)), color, 3)
+        _debug_save('26b_hough.jpg', vis_lines)
+
+    if not have_all_sides:
+        return None
+
+    def _line_intersect(l1, l2):
+        x1, y1, x2, y2 = l1[0], l1[1], l1[2], l1[3]
+        x3, y3, x4, y4 = l2[0], l2[1], l2[2], l2[3]
+        denom = (x1 - x2) * (y3 - y4) - (y1 - y2) * (x3 - x4)
+        if abs(denom) < 1e-6:
+            return None
+        t = ((x1 - x3) * (y3 - y4) - (y1 - y3) * (x3 - x4)) / denom
+        return np.array([x1 + t * (x2 - x1), y1 + t * (y2 - y1)], dtype=np.float32)
+
+    tl = _line_intersect(top, left)
+    tr = _line_intersect(top, right)
+    br = _line_intersect(bottom, right)
+    bl = _line_intersect(bottom, left)
+    if any(p is None for p in (tl, tr, br, bl)):
+        return None
+
+    quad = np.array([tl, tr, br, bl], dtype=np.float32)
+
+    rect = cv2.minAreaRect(quad)
     rw, rh = rect[1]
     if min(rw, rh) < 1:
-        return -1.0, 'thin'
-    rect_area = rw * rh
-    rectangularity = area / rect_area
-    if rectangularity < 0.50:
-        return -1.0, f'rect({rectangularity:.2f})'
-    return (rectangularity ** 3) * area_frac, f'ok({rectangularity:.2f})'
+        return None
+    quad_ar = max(rw, rh) / max(min(rw, rh), 1e-6)
+    cells_w = float(cmax[0] - cmin[0])
+    cells_h = float(cmax[1] - cmin[1])
+    cell_ar = max(cells_w, cells_h) / max(min(cells_w, cells_h), 1e-6)
+    if quad_ar > cell_ar * 1.5 or cell_ar > quad_ar * 1.5:
+        return None
 
-
-def _grabcut_mask(bgr: np.ndarray) -> np.ndarray:
-    """GrabCut mit zentralem Rechteck als Vordergrund-Hint.
-
-    Nutzt sowohl Farbe als auch Position — funktioniert auch wenn die Karte
-    teiltransparent ist und intensitaetsmaessig mit dem Hintergrund verschmilzt.
-    """
-    h, w = bgr.shape[:2]
-    mask = np.zeros((h, w), np.uint8)
-    margin_x = w // 6
-    margin_y = h // 6
-    rect = (margin_x, margin_y, w - 2 * margin_x, h - 2 * margin_y)
-    bgd = np.zeros((1, 65), np.float64)
-    fgd = np.zeros((1, 65), np.float64)
-    try:
-        cv2.grabCut(bgr, mask, rect, bgd, fgd, 5, cv2.GC_INIT_WITH_RECT)
-    except cv2.error:
-        return np.zeros((h, w), np.uint8)
-    out = np.where((mask == cv2.GC_FGD) | (mask == cv2.GC_PR_FGD), 255, 0)
-    return out.astype(np.uint8)
+    quad[:, 0] += x0
+    quad[:, 1] += y0
+    return order_quad_corners(quad)
 
 
 def _detect_reference_quad(gray: np.ndarray, bgr: Optional[np.ndarray] = None) -> Optional[np.ndarray]:
+    """Findet die Karte ueber das Zellraster.
+
+    Strategie (aus test_detect.py):
+      1. Canny -> alle 4-Eck-Kandidaten (= Zellen).
+      2. Filter: Groesse-Histogramm (Modus = Karten-Zellen).
+      3. Density-Filter: nur Zellen mit Nachbarn behalten -> Karten-Cluster.
+      4. minAreaRect ueber Zentroide + halbe Zellbreite Rand -> Initial-Quad.
+      5. Hough-Verfeinerung: 4 dominante Aussenlinien um die Zellen.
+
+    `bgr` wird nicht benoetigt (Detection laeuft auf gray); Parameter bleibt
+    aus Kompatibilitaetsgruenden erhalten.
     """
-    Findet den Tester als groesste rechteckige Region im Bild.
-
-    Primaerstrategie: GrabCut mit zentralem Hint -> Vordergrundsegment ist
-    die Karte. Fallbacks: Otsu / Canny / Sobel mit Morph-Close.
-    """
-    h, w = gray.shape[:2]
-    frame_area = float(h * w)
-
-    blurred = cv2.GaussianBlur(gray, (5, 5), 0)
-
-    # Kernelgroesse fuer "fill inner cells" skaliert mit dem Bild —
-    # gross genug um Innenzellen+Luecken (~50-60px bei 720) zu schliessen.
-    fill_k = max(31, min(w, h) // 12)
-    if fill_k % 2 == 0:
-        fill_k += 1
-
-    masks = []
-
-    # 1) GrabCut mit Zentrum-Hint — Hauptpfad, robust bei transparenter Karte.
-    if bgr is not None:
-        gc = _grabcut_mask(bgr)
-        # Leichtes Schliessen, falls innere Zellen als BG markiert wurden
-        gc_close = cv2.morphologyEx(gc, cv2.MORPH_CLOSE,
-                                    np.ones((fill_k, fill_k), np.uint8),
-                                    iterations=1)
-        masks.append(('grabcut', gc_close))
-
-    # Otsu (helle Karte = Vordergrund). MORPH_CLOSE schliesst die dunklen
-    # Innenzellen, damit das Kartenkorpus als ein einzelner Blob erscheint.
-    _, m_otsu = cv2.threshold(blurred, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
-    fk = np.ones((fill_k, fill_k), np.uint8)
-    masks.append(('otsu_filled',
-                  cv2.morphologyEx(m_otsu, cv2.MORPH_CLOSE, fk, iterations=1)))
-    masks.append(('otsu_inv_filled',
-                  cv2.morphologyEx(cv2.bitwise_not(m_otsu), cv2.MORPH_CLOSE,
-                                   fk, iterations=1)))
-
-    # Canny + Close: Kartenrand + Innenzellen werden zu einem dichten Blob.
-    edges = cv2.Canny(blurred, 30, 120)
-    masks.append(('canny_filled',
-                  cv2.morphologyEx(edges, cv2.MORPH_CLOSE, fk, iterations=2)))
-
-    # Adaptive Threshold + Fill — robust unter wechselnder Beleuchtung.
-    adapt = cv2.adaptiveThreshold(blurred, 255,
-                                  cv2.ADAPTIVE_THRESH_MEAN_C,
-                                  cv2.THRESH_BINARY_INV, 51, 5)
-    masks.append(('adapt_filled',
-                  cv2.morphologyEx(adapt, cv2.MORPH_CLOSE, fk, iterations=2)))
-
-    # Sobel-Magnitude + Fill — faengt schwache Kontraste, die Canny verpasst.
-    sx = cv2.Sobel(blurred, cv2.CV_32F, 1, 0, ksize=3)
-    sy = cv2.Sobel(blurred, cv2.CV_32F, 0, 1, ksize=3)
-    mag = cv2.magnitude(sx, sy)
-    mag_norm = cv2.normalize(mag, None, 0, 255, cv2.NORM_MINMAX).astype(np.uint8)
-    _, sobel_bin = cv2.threshold(mag_norm, 40, 255, cv2.THRESH_BINARY)
-    masks.append(('sobel_filled',
-                  cv2.morphologyEx(sobel_bin, cv2.MORPH_CLOSE, fk, iterations=2)))
+    edges = _compute_edges(gray)
+    cells = _detect_cell_rects(edges)
 
     if _DEBUG_DIR:
-        for name, mask in masks:
-            _debug_save(f'10_mask_{name}.jpg', mask)
+        vis = cv2.cvtColor(gray, cv2.COLOR_GRAY2BGR)
+        for cx, cy, cw, ch, _, _ in cells:
+            cv2.rectangle(vis, (cx - cw // 2, cy - ch // 2),
+                          (cx + cw // 2, cy + ch // 2), (0, 200, 255), 1)
+        _debug_save('21_all_cells.jpg', vis)
 
-    candidates = []
-    for name, mask in masks:
-        contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL,
-                                       cv2.CHAIN_APPROX_SIMPLE)
-        if _DEBUG_DIR:
-            vis = cv2.cvtColor(gray, cv2.COLOR_GRAY2BGR)
-            # Halbtransparente Maske einblenden
-            mask_bgr = cv2.cvtColor(mask, cv2.COLOR_GRAY2BGR)
-            vis = cv2.addWeighted(vis, 0.6, mask_bgr, 0.4, 0)
-        for cnt in contours:
-            score, reason = _score_quad(cnt, frame_area, w, h)
-            if score > 0:
-                candidates.append((score, cnt, name))
-            if _DEBUG_DIR:
-                color = (0, 255, 0) if score > 0 else (0, 0, 255)
-                cv2.drawContours(vis, [cnt], -1, color, 2)
-                x, y, _, _ = cv2.boundingRect(cnt)
-                txt = f'{reason}'
-                if score > 0:
-                    txt = f'{reason} s={score:.2f}'
-                cv2.putText(vis, txt, (x, max(y - 5, 12)),
-                            cv2.FONT_HERSHEY_SIMPLEX, 0.4, color, 1)
-        if _DEBUG_DIR:
-            _debug_save(f'12_contours_{name}.jpg', vis)
-
-    if not candidates:
+    if len(cells) < 6:
         return None
 
-    candidates.sort(key=lambda x: x[0], reverse=True)
-
+    sized = _filter_cells_by_size(cells)
     if _DEBUG_DIR:
-        # Top-Kandidaten visualisieren
         vis = cv2.cvtColor(gray, cv2.COLOR_GRAY2BGR)
-        for i, (score, cnt, name) in enumerate(candidates[:5]):
-            color = (0, 255, 0) if i == 0 else (0, 165, 255)
-            cv2.drawContours(vis, [cnt], -1, color, 2)
-            x, y, _, _ = cv2.boundingRect(cnt)
-            cv2.putText(vis, f'#{i} {name} {score:.2f}',
-                        (x, max(y - 5, 15)),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 1)
-        _debug_save('11_candidates.jpg', vis)
+        for cx, cy, cw, ch, _, _ in sized:
+            cv2.rectangle(vis, (cx - cw // 2, cy - ch // 2),
+                          (cx + cw // 2, cy + ch // 2), (0, 255, 255), 2)
+        _debug_save('22_size_filtered.jpg', vis)
 
-    # Versuche fuer die top-N Kandidaten approxPolyDP -> Quad
-    for _, cnt, _name in candidates[:10]:
-        hull = cv2.convexHull(cnt)
-        peri = cv2.arcLength(hull, True)
-        if peri < 1:
-            continue
-        for eps_frac in (0.015, 0.02, 0.03, 0.04, 0.06, 0.08, 0.10):
-            approx = cv2.approxPolyDP(hull, eps_frac * peri, True)
-            if len(approx) == 4 and cv2.isContourConvex(approx):
-                quad = approx.reshape(4, 2).astype(np.float32)
-                return order_quad_corners(quad)
+    if len(sized) < 6:
+        return None
 
-    # Fallback: minAreaRect des besten Kandidaten
-    box = cv2.boxPoints(cv2.minAreaRect(candidates[0][1])).astype(np.float32)
-    return order_quad_corners(box)
+    cluster = _filter_dense_cells(sized, k_neighbors=4)
+    if _DEBUG_DIR:
+        vis = cv2.cvtColor(gray, cv2.COLOR_GRAY2BGR)
+        for cx, cy, cw, ch, _, _ in cluster:
+            cv2.rectangle(vis, (cx - cw // 2, cy - ch // 2),
+                          (cx + cw // 2, cy + ch // 2), (0, 200, 0), 2)
+        _debug_save('23_dense.jpg', vis)
+    if len(cluster) < 6:
+        return None
+
+    pts = np.array([(c[0], c[1]) for c in cluster], dtype=np.float32)
+    sizes = np.array([max(c[2], c[3]) for c in cluster], dtype=np.float32)
+    cell_angles = np.array([c[5] for c in cluster], dtype=np.float32)
+    half_cell = float(np.median(sizes)) * 0.5
+
+    angle_deg = float(np.median(cell_angles))
+
+    theta = np.deg2rad(-angle_deg)
+    cos_t, sin_t = np.cos(theta), np.sin(theta)
+    R = np.array([[cos_t, -sin_t], [sin_t, cos_t]], dtype=np.float32)
+    centroid = pts.mean(axis=0)
+    rotated = (pts - centroid) @ R.T
+    rx0, ry0 = rotated.min(axis=0)
+    rx1, ry1 = rotated.max(axis=0)
+    rw = float(rx1 - rx0)
+    rh = float(ry1 - ry0)
+    if min(rw, rh) < 20:
+        return None
+
+    rw += 2 * half_cell
+    rh += 2 * half_cell
+    cx_r = (rx0 + rx1) * 0.5
+    cy_r = (ry0 + ry1) * 0.5
+
+    corners_r = np.array([
+        [cx_r - rw / 2, cy_r - rh / 2],
+        [cx_r + rw / 2, cy_r - rh / 2],
+        [cx_r + rw / 2, cy_r + rh / 2],
+        [cx_r - rw / 2, cy_r + rh / 2],
+    ], dtype=np.float32)
+    R_inv = R.T
+    quad = corners_r @ R_inv.T + centroid
+
+    h_img, w_img = gray.shape
+    quad[:, 0] = np.clip(quad[:, 0], 0, w_img - 1)
+    quad[:, 1] = np.clip(quad[:, 1], 0, h_img - 1)
+    cell_quad = order_quad_corners(quad)
+
+    # Hough-Verfeinerung. Margin skaliert mit der Bildgroesse — ein 4K-Foto
+    # braucht mehr Pixel Spielraum als ein 720p-Bild.
+    src_short = min(gray.shape[:2])
+    roi_margin = max(100, src_short // 8)
+    refined = _refine_quad_via_hough(gray, edges, cluster,
+                                     card_angle_deg=angle_deg,
+                                     margin=roi_margin)
+    if refined is not None:
+        if _DEBUG_DIR:
+            vis = cv2.cvtColor(gray, cv2.COLOR_GRAY2BGR)
+            cv2.polylines(vis, [refined.astype(np.int32)], True, (0, 255, 0), 4)
+            _debug_save('27_refined_quad.jpg', vis)
+        return refined
+    return cell_quad
 
 
 def _warp_to_canonical(bgr: np.ndarray, quad: np.ndarray,
@@ -518,7 +771,7 @@ def build_reference_from_rgba(rgba_bytes: bytes, width: int, height: int) -> dic
 # ----------------------------------------------------------
 
 try:
-    from java.util import Map as _JMap, List as _JList
+    from java.util import Map as _JMap, List as _JList  # pyright: ignore[reportMissingImports]
 except ImportError:  # not running on Chaquopy (e.g. unit tests)
     _JMap = _JList = None
 

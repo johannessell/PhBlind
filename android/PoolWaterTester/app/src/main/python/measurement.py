@@ -22,6 +22,38 @@ from tracker import IndicatorTracker, QuadStabilityChecker
 _HERE = os.path.dirname(__file__)
 _STABILITY = QuadStabilityChecker(required_frames=5, max_drift=20.0)
 
+# Detection runs at this width — tracker.py's px-hardcoded thresholds
+# (radius=80, _verify_quad min-line-length etc.) were tuned at ~720p.
+# Phone preview is typically 1080p+ so we scale down before find(), then
+# scale the quad back up so the returned coordinates match the caller's
+# original frame (used for the preview overlay).
+_DETECT_TARGET_W = 720
+
+
+def _detect_at_reduced_scale(gray: np.ndarray):
+    """Run _TRACKER.find on a downscaled copy; return (quad_full, method).
+
+    Quad is rescaled to the input frame's coordinate system. If the input
+    is already <= target width we skip the resize.
+    """
+    h, w = gray.shape[:2]
+    if w > _DETECT_TARGET_W * 1.25:
+        scale = _DETECT_TARGET_W / float(w)
+        new_w = int(round(w * scale))
+        new_h = int(round(h * scale))
+        small = cv2.resize(gray, (new_w, new_h), interpolation=cv2.INTER_AREA)
+    else:
+        scale = 1.0
+        small = gray
+
+    quad_small, method = _TRACKER.find(small)
+    if quad_small is None:
+        return None, method
+    if scale == 1.0:
+        return quad_small, method
+    quad_full = (quad_small / scale).astype(np.float32)
+    return quad_full, method
+
 _REF: dict = {}
 _TEMPLATE = None
 _TEMPLATE_GRAY = None
@@ -194,40 +226,17 @@ def find_quad_y(y_bytes: bytes, width: int, height: int,
     display orientation, runs IndicatorTracker + stability check.
     Returns coords in the upright (post-rotation) frame.
 
-    TODO(stability+lag): on-device tracking is both less stable AND laggy
-    compared to the desktop CLI. The two symptoms share a root cause
-    (1080p Y plane into pixel-hardcoded tracker), so one fix (1a) helps
-    both. Likely causes, in order of impact:
+    Detection is run via _detect_at_reduced_scale (downscale to ~720 px wide)
+    so tracker.py's px-hardcoded thresholds match the resolution they were
+    tuned at. The returned quad is in the original (post-rotation) frame.
 
-      1. Resolution mismatch. CLI ran with --scale 0.5 (~540p). Here we
-         feed 1080p. Several constants in tracker.detect_card_by_cell_cluster
-         are hardcoded in pixels, not frame-fraction:
-             - radius = 80.0   (neighbor search for dense-cell filter)
-             - min_cells = 6
-             - _verify_quad: warp to 128x90, HoughLinesP thresholds
-               (threshold=15, minLineLength=12, h>=20, v>=4)
-         At 2x resolution the raster spacing grows, so 80 px no longer
-         covers "2-4 cell widths". Quad flickers because the dense-cell
-         set jitters frame-to-frame.
-
-         Fix options:
-           a) Downscale gray to ~720 px wide before tracker.find(), then
-              scale quad back up by the same factor. Minimal code change.
-           b) Make radius (and the other px constants in tracker.py)
-              proportional to min(h, w) — cleaner long-term.
-
-      2. Stability gate tuned for CLI fps. QuadStabilityChecker(required=5,
-         max_drift=15) at ~30 fps = ~170 ms. On-device analysis runs slower
-         (tracker per frame is heavy at 1080p), so 5 frames takes longer
-         and user-hand drift accumulates. We already bumped max_drift=20;
-         consider required=3 once (1) is fixed.
-
-      3. Tracking runs on every analyzer frame. If CPU-bound, drop to
-         every 2nd/3rd frame — gives tracker a bigger time budget and
-         reduces jitter from partial results.
-
-      4. Measure actual fps via a frame counter in Kotlin; only then tune
-         required_frames. Guessing without numbers will churn.
+    Open follow-ups (in order of likely impact):
+      - Tune QuadStabilityChecker(required, max_drift) once on-device fps
+        is measured. Currently required=5, max_drift=20.
+      - If still CPU-bound, skip every other analyzer frame.
+      - Long-term: make tracker.detect_card_by_cell_cluster scale-invariant
+        (radius proportional to median cell size, like reference_builder
+        does) so the explicit downscale isn't needed.
     """
     arr = np.frombuffer(y_bytes, dtype=np.uint8)
     if row_stride == width:
@@ -239,7 +248,7 @@ def find_quad_y(y_bytes: bytes, width: int, height: int,
         gray = np.rot90(gray, k=k)
     gray = np.ascontiguousarray(gray)
 
-    quad, method = _TRACKER.find(gray)
+    quad, method = _detect_at_reduced_scale(gray)
     stable = _STABILITY.update(quad)
     return {
         'found': quad is not None,
@@ -265,9 +274,11 @@ def measure_rgba(rgba_bytes: bytes, width: int, height: int) -> dict:
     arr = np.frombuffer(rgba_bytes, dtype=np.uint8).reshape(height, width, 4)
     bgr = cv2.cvtColor(arr, cv2.COLOR_RGBA2BGR)
     gray = cv2.cvtColor(bgr, cv2.COLOR_BGR2GRAY)
-    quad, method = _TRACKER.find(gray)
+    quad, method = _detect_at_reduced_scale(gray)
     if quad is None:
         return {'found': False, 'results': {}, 'quad': None, 'method': method}
+    # Warp the full-res BGR with the upscaled quad — keep original color
+    # resolution for measurement; only detection ran at reduced scale.
     warped = _TRACKER.warp(bgr, quad)
     results = _measure_warped(warped)
     return {

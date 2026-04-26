@@ -24,6 +24,7 @@ import os
 import sys
 import glob
 from typing import List, Optional, Tuple
+import math
 
 import cv2
 import numpy as np
@@ -124,7 +125,7 @@ def detect_cell_rects(gray: np.ndarray, debug_dir: Optional[str] = None) -> List
     gray = cv2.bilateralFilter(gray, 5, 200, 200)
     clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
     enhanced = clahe.apply(gray)
-    edges = cv2.Canny(enhanced, 30, 120)
+    edges = cv2.Canny(enhanced, 30, 90)
     # Schliesse kleine Luecken in Zellumrandungen (z.B. wenn Text die
     # Zellrahmenlinie unterbricht), damit findContours die Zelle als
     # geschlossenes Polygon liefert.
@@ -254,7 +255,7 @@ def refine_quad_via_hough(gray: np.ndarray, cells, card_angle_deg: float,
         return None
 
     blurred = cv2.GaussianBlur(crop, (5, 5), 0)
-    edges = cv2.Canny(blurred, 30, 120)
+    edges = cv2.Canny(blurred, 30, 90)
 
     if debug_dir:
         vis_roi = cv2.cvtColor(gray, cv2.COLOR_GRAY2BGR)
@@ -265,126 +266,154 @@ def refine_quad_via_hough(gray: np.ndarray, cells, card_angle_deg: float,
 
     cell_short = float(np.median([min(c[2], c[3]) for c in cells]))
 
-    # Niedrigere Schwelle, damit auch schwache Karten-Aussenkanten als Linien
-    # auftauchen — die Auswahl filtert dann ueber Abstand zur Zellgruppe.
-    threshold = max(int(cell_short * 1.5), 40)
-    lines = cv2.HoughLines(edges, rho=1, theta=np.pi / 180, threshold=threshold)
-    if lines is None or len(lines) < 4:
+    # HoughLinesP: Liniensegmente. minLineLength etwas kleiner als die kurze
+    # Kartenkante, damit Aussenkanten auch in zwei kurze Stuecke zerfallen
+    # nicht verloren gehen.
+    threshold = max(int(cell_short * 1.0), 30)
+    min_line_len = max(int(cell_short * 2.5), 50)
+    lines_p = cv2.HoughLinesP(edges, rho=1, theta=np.pi / 180,
+                              threshold=threshold,
+                              minLineLength=min_line_len,
+                              maxLineGap=10)
+    if lines_p is None or len(lines_p) < 4:
         return None
 
-    cell_cx_crop = float(np.mean([c[0] for c in cells])) - x0
-    cell_cy_crop = float(np.mean([c[1] for c in cells])) - y0
-
+    # Inner-Box (rotiertes Rechteck der Zellen + halbe Zellbreite Rand) in
+    # Crop-Koordinaten. Linien deren Mittelpunkt INNERHALB liegen, sind
+    # Gitterlinien und keine Kartenaussenkanten -> verwerfen.
     card_angle_rad = np.deg2rad(card_angle_deg)
-    h_target = (np.pi / 2 + card_angle_rad) % np.pi
-    v_target = card_angle_rad % np.pi
+    cos_t, sin_t = float(np.cos(card_angle_rad)), float(np.sin(card_angle_rad))
+    cell_pts_crop = np.array([(c[0] - x0, c[1] - y0) for c in cells], dtype=np.float32)
+    cell_centroid = cell_pts_crop.mean(axis=0)
+    # Forward rotation in card frame: R^T * (p - centroid). Card frame: x along
+    # card width, y along card height.
+    R = np.array([[cos_t, sin_t], [-sin_t, cos_t]], dtype=np.float32)
+    rotated_cells = (cell_pts_crop - cell_centroid) @ R.T
+    cmin = rotated_cells.min(axis=0)
+    cmax = rotated_cells.max(axis=0)
+    pad = 0.5 * cell_short
+    inner_xmin = cmin[0] - pad
+    inner_xmax = cmax[0] + pad
+    inner_ymin = cmin[1] - pad
+    inner_ymax = cmax[1] + pad
+
+    def _to_card_frame(x, y):
+        dx = x - cell_centroid[0]
+        dy = y - cell_centroid[1]
+        return dx * cos_t + dy * sin_t, -dx * sin_t + dy * cos_t
+
+    def _is_inside_inner(x, y):
+        rx, ry = _to_card_frame(x, y)
+        return inner_xmin <= rx <= inner_xmax and inner_ymin <= ry <= inner_ymax
+
+    # Erwartete Bereiche fuer die 4 Kartenseiten (im Karten-Frame, y-Achse).
+    margin_lo = 0.3 * cell_short
+    margin_hi = 2.5 * cell_short
+
+    h_target = card_angle_rad % np.pi   # Linien parallel zur Karten-x (Zell-Kante)
+    v_target = (card_angle_rad + np.pi / 2) % np.pi  # Linien parallel zur Karten-y
     angle_tol = np.deg2rad(15)
 
     def _ang_dist(a, b):
         d = abs(a - b) % np.pi
         return min(d, np.pi - d)
 
-    def _signed(rho, theta):
-        return rho - (cell_cx_crop * np.cos(theta) + cell_cy_crop * np.sin(theta))
+    def _is_horizontal(seg_deg):
+        # Segment-Winkel in [0,180) — horizontale Linie nahe 0 oder 180.
+        return seg_deg <= 15.0 or seg_deg >= 165.0
 
-    # Cell-Projektionen: extreme Zellgrenzen in beiden Karten-Richtungen,
-    # sodass wir Linien filtern koennen, die nur knapp ausserhalb liegen.
-    def _cell_projections(theta):
-        # signed perpendicular distance vom Zell-Cluster-Mittel zu jeder Zelle
-        ds = []
-        for c in cells:
-            cx = c[0] - x0
-            cy = c[1] - y0
-            d = (cx - cell_cx_crop) * np.cos(theta) + (cy - cell_cy_crop) * np.sin(theta)
-            ds.append(d)
-        return min(ds), max(ds)
+    def _is_vertical(seg_deg):
+        # Vertikale Linie: 75..105 (mit User-Vorgabe ~80..110, leicht asymmetrisch).
+        return 75.0 <= seg_deg <= 105.0
 
-    h_min, h_max = _cell_projections(h_target)
-    v_min, v_max = _cell_projections(v_target)
+    horizontal_top, horizontal_bottom = [], []  # parallel to card width
+    vertical_left, vertical_right = [], []      # parallel to card height
+    accepted = []  # for debug overlay
 
-    # Erwarteter Abstand der Kartenkante: 0.3..2.5 Zell-Hoehen jenseits
-    # der aeusseren Zelle. Inneren Gitter-Linien liegen INNERHALB der
-    # Zellgrenzen und werden so verworfen.
-    margin_lo = 0.3 * cell_short
-    margin_hi = 2.5 * cell_short
+    for line in lines_p:
+        x1, y1, x2, y2 = (float(v) for v in line[0])
+        mx = (x1 + x2) * 0.5
+        my = (y1 + y2) * 0.5
+        if _is_inside_inner(mx, my):
+            continue  # Gitterlinie
 
-    horizontal_top = []     # signed dist <= h_min - margin_lo
-    horizontal_bottom = []  # signed dist >= h_max + margin_lo
-    vertical_left = []
-    vertical_right = []
+        # Liniensegment-Winkel (in [0, pi))
+        seg_angle = float(math.atan2(y2 - y1, x2 - x1)) % np.pi
+        seg_deg = np.degrees(seg_angle)
+        # Mittelpunkt im Karten-Frame -> direkte y/x-Position
+        rx, ry = _to_card_frame(mx, my)
 
-    for line in lines:
-        rho, theta = line[0]
-        sd = _signed(float(rho), float(theta))
-        if _ang_dist(theta, h_target) < angle_tol:
-            if h_min - margin_hi <= sd <= h_min - margin_lo:
-                horizontal_top.append((float(rho), float(theta), sd))
-            elif h_max + margin_lo <= sd <= h_max + margin_hi:
-                horizontal_bottom.append((float(rho), float(theta), sd))
-        elif _ang_dist(theta, v_target) < angle_tol:
-            if v_min - margin_hi <= sd <= v_min - margin_lo:
-                vertical_left.append((float(rho), float(theta), sd))
-            elif v_max + margin_lo <= sd <= v_max + margin_hi:
-                vertical_right.append((float(rho), float(theta), sd))
+        # Top/Bottom: muss horizontal sein (Bildframe) UND parallel zur Karten-x.
+        if _is_horizontal(seg_deg) and _ang_dist(seg_angle, h_target) < angle_tol:
+            if cmin[1] - margin_hi <= ry <= cmin[1] - margin_lo:
+                horizontal_top.append((x1, y1, x2, y2, seg_angle, ry))
+                accepted.append(('top', x1, y1, x2, y2))
+            elif cmax[1] + margin_lo <= ry <= cmax[1] + margin_hi:
+                horizontal_bottom.append((x1, y1, x2, y2, seg_angle, ry))
+                accepted.append(('bottom', x1, y1, x2, y2))
+        # Left/Right: muss vertikal sein (Bildframe ~80-110°) UND parallel zur Karten-y.
+        elif _is_vertical(seg_deg) and _ang_dist(seg_angle, v_target) < angle_tol:
+            if cmin[0] - margin_hi <= rx <= cmin[0] - margin_lo:
+                vertical_left.append((x1, y1, x2, y2, seg_angle, rx))
+                accepted.append(('left', x1, y1, x2, y2))
+            elif cmax[0] + margin_lo <= rx <= cmax[0] + margin_hi:
+                vertical_right.append((x1, y1, x2, y2, seg_angle, rx))
+                accepted.append(('right', x1, y1, x2, y2))
 
     if not (horizontal_top and horizontal_bottom and vertical_left and vertical_right):
         return None
 
-    # Aus jeder Seite die aeusserste Linie waehlen (= weiteste vom Zentrum).
-    top = min(horizontal_top, key=lambda l: l[2])[:2]
-    bottom = max(horizontal_bottom, key=lambda l: l[2])[:2]
-    left = min(vertical_left, key=lambda l: l[2])[:2]
-    right = max(vertical_right, key=lambda l: l[2])[:2]
+    # Aus jeder Seite die aeusserste Linie waehlen.
+    top = min(horizontal_top, key=lambda l: l[5])
+    bottom = max(horizontal_bottom, key=lambda l: l[5])
+    left = min(vertical_left, key=lambda l: l[5])
+    right = max(vertical_right, key=lambda l: l[5])
 
     if debug_dir:
         vis_lines = cv2.cvtColor(crop, cv2.COLOR_GRAY2BGR)
-        for line in lines:
-            rho, theta = line[0]
-            a, b = np.cos(theta), np.sin(theta)
-            x_, y_ = a * rho, b * rho
-            p1 = (int(x_ + 2000 * (-b)), int(y_ + 2000 * a))
-            p2 = (int(x_ - 2000 * (-b)), int(y_ - 2000 * a))
-            cv2.line(vis_lines, p1, p2, (80, 80, 80), 1)
-        for (rho, theta), color in [(top, (0, 255, 0)), (bottom, (0, 255, 0)),
-                                    (left, (0, 200, 255)), (right, (0, 200, 255))]:
-            a, b = np.cos(theta), np.sin(theta)
-            x_, y_ = a * rho, b * rho
-            p1 = (int(x_ + 2000 * (-b)), int(y_ + 2000 * a))
-            p2 = (int(x_ - 2000 * (-b)), int(y_ - 2000 * a))
-            cv2.line(vis_lines, p1, p2, color, 3)
+        for line in lines_p:
+            x1, y1, x2, y2 = (int(v) for v in line[0])
+            cv2.line(vis_lines, (x1, y1), (x2, y2), (60, 60, 60), 1)
+        side_color = {'top': (0, 255, 0), 'bottom': (0, 255, 0),
+                      'left': (0, 200, 255), 'right': (0, 200, 255)}
+        for side, x1, y1, x2, y2 in accepted:
+            cv2.line(vis_lines, (int(x1), int(y1)), (int(x2), int(y2)),
+                     side_color[side], 2)
+        for chosen, color in [(top, (0, 0, 255)), (bottom, (0, 0, 255)),
+                              (left, (255, 0, 255)), (right, (255, 0, 255))]:
+            x1, y1, x2, y2 = chosen[0], chosen[1], chosen[2], chosen[3]
+            cv2.line(vis_lines, (int(x1), int(y1)), (int(x2), int(y2)), color, 3)
         cv2.imwrite(os.path.join(debug_dir, '26b_hough.jpg'), vis_lines)
 
-    def _intersect(l1, l2):
-        rho1, theta1 = l1
-        rho2, theta2 = l2
-        A = np.array([[np.cos(theta1), np.sin(theta1)],
-                      [np.cos(theta2), np.sin(theta2)]], dtype=np.float64)
-        b = np.array([rho1, rho2], dtype=np.float64)
-        det = A[0, 0] * A[1, 1] - A[0, 1] * A[1, 0]
-        if abs(det) < 1e-6:
+    def _line_intersect(l1, l2):
+        # l = (x1, y1, x2, y2, ...). Parametrisch: P = A + t*(B-A); Q = C + u*(D-C)
+        x1, y1, x2, y2 = l1[0], l1[1], l1[2], l1[3]
+        x3, y3, x4, y4 = l2[0], l2[1], l2[2], l2[3]
+        denom = (x1 - x2) * (y3 - y4) - (y1 - y2) * (x3 - x4)
+        if abs(denom) < 1e-6:
             return None
-        return np.linalg.solve(A, b)
+        t = ((x1 - x3) * (y3 - y4) - (y1 - y3) * (x3 - x4)) / denom
+        return np.array([x1 + t * (x2 - x1), y1 + t * (y2 - y1)], dtype=np.float32)
 
-    tl = _intersect(top, left)
-    tr = _intersect(top, right)
-    br = _intersect(bottom, right)
-    bl = _intersect(bottom, left)
+    tl = _line_intersect(top, left)
+    tr = _line_intersect(top, right)
+    br = _line_intersect(bottom, right)
+    bl = _line_intersect(bottom, left)
     if any(p is None for p in (tl, tr, br, bl)):
         return None
 
     quad = np.array([tl, tr, br, bl], dtype=np.float32)
 
-    # Sanity check: Quad muss zur Karte passen. Aspekt-Ratio sollte zur
-    # Zell-Bounding-Box passen, sonst ist eine Linie kaputt.
+    # Sanity check: Quad-Aspekt sollte zum Zell-Bounding-Aspekt passen,
+    # sonst ist eine Linie kaputt -> fallback auf cell_quad.
     rect = cv2.minAreaRect(quad)
     rw, rh = rect[1]
     if min(rw, rh) < 1:
         return None
     quad_ar = max(rw, rh) / max(min(rw, rh), 1e-6)
-    cell_w_extent = float(v_max - v_min)
-    cell_h_extent = float(h_max - h_min)
-    cell_ar = max(cell_w_extent, cell_h_extent) / max(min(cell_w_extent, cell_h_extent), 1e-6)
-    # Quad-Aspekt darf hoechstens 1.5x von Zell-Bounding-Aspekt abweichen.
+    cells_w = float(cmax[0] - cmin[0])
+    cells_h = float(cmax[1] - cmin[1])
+    cell_ar = max(cells_w, cells_h) / max(min(cells_w, cells_h), 1e-6)
     if quad_ar > cell_ar * 1.5 or cell_ar > quad_ar * 1.5:
         return None
 
@@ -509,7 +538,7 @@ def warp_to_canonical(bgr: np.ndarray, quad: np.ndarray,
     dst = np.float32([[0, 0], [cw, 0], [cw, ch], [0, ch]])
     M = cv2.getPerspectiveTransform(pts, dst)
     warped = cv2.warpPerspective(bgr, M, (cw, ch),
-                                 flags=cv2.INTER_LINEAR,
+                                 flags=cv2.INTER_LANCZOS4,
                                  borderMode=cv2.BORDER_REPLICATE)
     return warped, (cw, ch)
 

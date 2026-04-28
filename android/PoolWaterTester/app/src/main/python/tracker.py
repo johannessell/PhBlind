@@ -51,6 +51,131 @@ def order_quad_corners(pts: np.ndarray) -> np.ndarray:
 # Zell-Cluster-Detektion
 # ══════════════════════════════════════════════════════════
 
+def _dedupe_cells(cells, center_tol_factor: float = 0.3, size_tol: float = 0.25):
+    """findContours returns inner+outer edges of each cell frame as separate
+    contours; drop the smaller of any near-duplicate pair (keep outer)."""
+    if len(cells) < 2:
+        return cells
+    sorted_cells = sorted(cells, key=lambda c: c[2] * c[3], reverse=True)
+    keep = []
+    for c in sorted_cells:
+        cx, cy, w, h, _, _ = c
+        center_tol = max(w, h) * center_tol_factor
+        is_dup = False
+        for k in keep:
+            kx, ky, kw, kh, _, _ = k
+            if (abs(kx - cx) <= center_tol and abs(ky - cy) <= center_tol
+                    and abs(kw - w) <= max(kw, w) * size_tol
+                    and abs(kh - h) <= max(kh, h) * size_tol):
+                is_dup = True
+                break
+        if not is_dup:
+            keep.append(c)
+    return keep
+
+
+def _drop_nested(cells):
+    """Drop cells whose center sits inside a >=1.2x larger cell (= text/digit
+    contour inside a real cell)."""
+    if len(cells) < 2:
+        return cells
+    sorted_cells = sorted(cells, key=lambda c: c[2] * c[3], reverse=True)
+    keep = []
+    for c in sorted_cells:
+        cx, cy, w, h, _, _ = c
+        nested = False
+        for k in keep:
+            kx, ky, kw, kh, _, _ = k
+            if (kw * kh > w * h * 1.2
+                    and kx - kw / 2 <= cx <= kx + kw / 2
+                    and ky - kh / 2 <= cy <= ky + kh / 2):
+                nested = True
+                break
+        if not nested:
+            keep.append(c)
+    return keep
+
+
+def _detect_cell_rects(edges: np.ndarray):
+    """Find rectangle-ish small contours; return (cx, cy, long, short, area, ang_deg)."""
+    edges_closed = cv2.morphologyEx(edges, cv2.MORPH_CLOSE,
+                                    np.ones((5, 5), np.uint8), iterations=1)
+    contours, _ = cv2.findContours(edges_closed, cv2.RETR_LIST,
+                                   cv2.CHAIN_APPROX_SIMPLE)
+
+    h, w = edges.shape
+    frame_area = float(h * w)
+    min_cell = frame_area * 0.0001
+    max_cell = frame_area * 0.02
+
+    cells = []
+    for cnt in contours:
+        area = cv2.contourArea(cnt)
+        if area < min_cell or area > max_cell:
+            continue
+        hull = cv2.convexHull(cnt)
+        rect = cv2.minAreaRect(hull)
+        rw, rh = rect[1]
+        if min(rw, rh) < 4:
+            continue
+        ar = max(rw, rh) / (min(rw, rh) + 1e-6)
+        if ar > 4.5:
+            continue
+        rect_area = rw * rh
+        if rect_area < 1:
+            continue
+        rectangularity = area / rect_area
+        if rectangularity < 0.6:
+            continue
+        ang = rect[2]
+        if rw < rh:
+            ang += 90.0
+        while ang > 45.0:
+            ang -= 90.0
+        while ang < -45.0:
+            ang += 90.0
+        cx, cy = rect[0]
+        long_side = max(rw, rh)
+        short_side = min(rw, rh)
+        cells.append((int(cx), int(cy), int(long_side), int(short_side),
+                      float(area), float(ang)))
+
+    cells = _dedupe_cells(cells)
+    cells = _drop_nested(cells)
+    return cells
+
+
+def _filter_cells_by_size(cells, tolerance: float = 0.40, n_bins: int = 20):
+    """Keep cells whose short side is near the histogram mode. Card cells are
+    uniform; stray rectangles (background clutter) typically aren't."""
+    if len(cells) < 4:
+        return cells
+    heights = np.array([c[3] for c in cells], dtype=np.float32)
+    hist, edges = np.histogram(heights, bins=n_bins)
+    mode_idx = int(np.argmax(hist))
+    mode_h = float(0.5 * (edges[mode_idx] + edges[mode_idx + 1]))
+    lo = mode_h * (1.0 - tolerance)
+    hi = mode_h * (1.0 + tolerance)
+    return [c for c in cells if lo <= c[3] <= hi]
+
+
+def _filter_dense_cells(cells, k_neighbors: int = 4, radius_factor: float = 2.5):
+    """Keep cells with >= k neighbors within radius scaled by median cell size.
+    Scale-invariant: the radius adapts to the resolution."""
+    if len(cells) < k_neighbors:
+        return []
+    pts = np.array([(c[0], c[1]) for c in cells], dtype=np.float32)
+    sizes = np.array([max(c[2], c[3]) for c in cells], dtype=np.float32)
+    median_size = float(np.median(sizes))
+    radius = max(median_size * radius_factor, 30.0)
+    keep_idx = []
+    for i, p in enumerate(pts):
+        dists = np.linalg.norm(pts - p, axis=1)
+        if int(np.sum(dists < radius)) >= k_neighbors:
+            keep_idx.append(i)
+    return [cells[i] for i in keep_idx]
+
+
 def detect_card_by_cell_cluster(
     gray: np.ndarray,
     aspect_ratio: float,
@@ -58,99 +183,89 @@ def detect_card_by_cell_cluster(
     min_cells: int   = 6,
 ) -> Optional[np.ndarray]:
     """
-    Findet die Karte über ihre Gitterzellen (statt der Außenkontur).
+    Scale-invariant cell-cluster detection.
 
-    Die Außenkontur verschmilzt häufig mit dem Hintergrund (Tischkante etc.).
-    Die internen Zell-Rechtecke bleiben aber sichtbar und dicht gruppiert.
+    Pipeline:
+      1. Canny on bilateral+CLAHE-enhanced gray.
+      2. Find rectangle-ish contours (rectangularity >= 0.6 instead of strict
+         4-vertex approxPolyDP — survives noisy edges).
+      3. Dedup near-coincident contours, drop nested (text inside a cell).
+      4. Size-histogram filter: keep cells whose short side matches the mode.
+         Card cells are uniform so they dominate the histogram; stray
+         rectangles end up in other bins and get dropped before they bias
+         the density radius.
+      5. Density filter: radius proportional to median cell size (NOT a fixed
+         80 px), so it works at any resolution.
+      6. Card rotation = median of per-cell angles (robust to outlier corners).
+      7. Axis-aligned bbox in card frame, expanded by half a cell, rotated back
+         into image coordinates.
 
-    Ablauf:
-      1. Canny (ohne Dilatation, um Verschmelzung zu vermeiden)
-      2. RETR_LIST: alle Konturen, nicht nur äußerste
-      3. Kleine rechteckige Konturen = Zellkandidaten
-      4. Dichtefilter: nur Zellen mit ≥3 Nachbarn innerhalb 80px behalten
-         (Karten­raster = dicht; Hintergrundrechtecke = verteilt)
-      5. minAreaRect auf den dichten Zellen → rotiertes Viereck
-      6. Erweiterung um ~halbe Zellgröße (Zellzentren liegen nicht am Kartenrand)
-
-    Returns:
-        quad (4,2 float32) TL→TR→BR→BL, oder None
+    Best run at the camera's native resolution: the size-histogram filter
+    needs enough pixels to separate card-cell sizes from background noise.
+    Hough refinement (which the reference build does) is intentionally
+    skipped here — the live overlay just needs the cell-cluster quad; the
+    stabilized capture goes through reference_builder for the precise warp.
     """
-    h, w       = gray.shape[:2]
-    frame_area = h * w
+    h_img, w_img = gray.shape[:2]
 
-    blurred  = cv2.GaussianBlur(gray, (5, 5), 0)
-    clahe    = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
-    enhanced = clahe.apply(blurred)
-    edges    = cv2.Canny(enhanced, 30, 120)
+    filtered = cv2.bilateralFilter(gray, 5, 200, 200)
+    clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
+    enhanced = clahe.apply(filtered)
+    edges = cv2.Canny(enhanced, 30, 90)
 
-    contours, _ = cv2.findContours(edges, cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
-
-    min_cell = frame_area * 0.0001
-    max_cell = frame_area * 0.02
-
-    centers:    List[Tuple[float, float]] = []
-    cell_sizes: List[float]               = []
-    for cnt in contours:
-        area = cv2.contourArea(cnt)
-        if area < min_cell or area > max_cell:
-            continue
-
-        hull = cv2.convexHull(cnt)
-        peri = cv2.arcLength(hull, True)
-        if peri < 1:
-            continue
-        approx = cv2.approxPolyDP(hull, 0.08 * peri, True)
-        if len(approx) != 4:
-            continue
-
-        rect_box   = cv2.minAreaRect(approx)
-        rw_c, rh_c = rect_box[1]
-        if min(rw_c, rh_c) < 4:
-            continue
-        cell_ar = max(rw_c, rh_c) / (min(rw_c, rh_c) + 1e-6)
-        if cell_ar > 4.5:
-            continue
-
-        cx, cy = rect_box[0]
-        centers.append((cx, cy))
-        cell_sizes.append(max(rw_c, rh_c))
-
-    if len(centers) < min_cells:
+    cells = _detect_cell_rects(edges)
+    if len(cells) < min_cells:
         return None
 
-    pts = np.array(centers, dtype=np.float32)
-
-    # Dichte Zellen: ≥3 Nachbarn in 80px (ca. 2-4 Zellbreiten bei typischer Entfernung)
-    radius = 80.0
-    keep   = []
-    for i, p in enumerate(pts):
-        dists = np.linalg.norm(pts - p, axis=1)
-        if int(np.sum(dists < radius)) >= 4:            # self + 3 Nachbarn
-            keep.append(i)
-    if len(keep) < min_cells:
+    sized = _filter_cells_by_size(cells)
+    if len(sized) < min_cells:
         return None
-    dense       = pts[keep]
-    dense_sizes = np.array([cell_sizes[i] for i in keep])
 
-    # Rotiertes Rechteck (ermöglicht korrekte Entzerrung bei gekippter Karte)
-    (cx, cy), (rw, rh), angle = cv2.minAreaRect(dense)
+    cluster = _filter_dense_cells(sized, k_neighbors=4)
+    if len(cluster) < min_cells:
+        return None
+
+    pts = np.array([(c[0], c[1]) for c in cluster], dtype=np.float32)
+    sizes = np.array([max(c[2], c[3]) for c in cluster], dtype=np.float32)
+    cell_angles = np.array([c[5] for c in cluster], dtype=np.float32)
+    half_cell = float(np.median(sizes)) * 0.5
+
+    # Median angle of individual cell rects = card rotation. minAreaRect over
+    # the cluster centroids tilts when the dense set is asymmetric; the
+    # median per-cell angle does not.
+    angle_deg = float(np.median(cell_angles))
+
+    theta = np.deg2rad(-angle_deg)
+    cos_t, sin_t = np.cos(theta), np.sin(theta)
+    R = np.array([[cos_t, -sin_t], [sin_t, cos_t]], dtype=np.float32)
+    centroid = pts.mean(axis=0)
+    rotated = (pts - centroid) @ R.T
+    rx0, ry0 = rotated.min(axis=0)
+    rx1, ry1 = rotated.max(axis=0)
+    rw = float(rx1 - rx0) + 2 * half_cell
+    rh = float(ry1 - ry0) + 2 * half_cell
     if min(rw, rh) < 20:
         return None
 
-    ar    = max(rw, rh) / (min(rw, rh) + 1e-6)
+    ar = max(rw, rh) / (min(rw, rh) + 1e-6)
     ar_lo = aspect_ratio * (1.0 - ratio_tol)
     ar_hi = aspect_ratio * (1.0 + ratio_tol)
     if not (ar_lo <= ar <= ar_hi):
         return None
 
-    # Zellzentren liegen nicht am Kartenrand — um halbe Zellgröße nach außen erweitern
-    half_cell = float(np.median(dense_sizes)) * 0.5
-    expanded  = ((cx, cy), (rw + 2 * half_cell, rh + 2 * half_cell), angle)
+    cx_r = (rx0 + rx1) * 0.5
+    cy_r = (ry0 + ry1) * 0.5
+    corners_r = np.array([
+        [cx_r - rw / 2, cy_r - rh / 2],
+        [cx_r + rw / 2, cy_r - rh / 2],
+        [cx_r + rw / 2, cy_r + rh / 2],
+        [cx_r - rw / 2, cy_r + rh / 2],
+    ], dtype=np.float32)
+    R_inv = R.T
+    quad = corners_r @ R_inv.T + centroid
 
-    quad = cv2.boxPoints(expanded).astype(np.float32)
-    quad[:, 0] = np.clip(quad[:, 0], 0, w - 1)
-    quad[:, 1] = np.clip(quad[:, 1], 0, h - 1)
-
+    quad[:, 0] = np.clip(quad[:, 0], 0, w_img - 1)
+    quad[:, 1] = np.clip(quad[:, 1], 0, h_img - 1)
     return order_quad_corners(quad)
 
 

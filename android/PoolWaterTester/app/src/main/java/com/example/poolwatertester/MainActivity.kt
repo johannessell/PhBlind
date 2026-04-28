@@ -65,6 +65,14 @@ class MainActivity : AppCompatActivity() {
         try {
             val info = measurement.callAttr("init", refDir.absolutePath)
             Log.i(TAG, "measurement init: $info")
+            // Sync the overlay guide rectangle to the loaded template's aspect.
+            val infoMap = info.asMap()
+            val tplW = infoMap[PyObject.fromJava("width")]?.toInt() ?: 0
+            val tplH = infoMap[PyObject.fromJava("height")]?.toInt() ?: 0
+            if (tplW > 0 && tplH > 0) {
+                val ar = maxOf(tplW, tplH).toFloat() / minOf(tplW, tplH).toFloat()
+                binding.overlay.setTargetAspect(ar)
+            }
         } catch (e: Exception) {
             Log.e(TAG, "measurement init failed", e)
         }

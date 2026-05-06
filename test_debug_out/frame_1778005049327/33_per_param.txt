@@ -1,0 +1,26 @@
+
+=== pH ===
+  color_cells=7 measure_cells=8
+  ref: best_channel=A ref_r=0.98
+  runtime r (tgt_ch vs y) = 0.911  (sign OK)
+  t2r linear: slope=1.011 intercept=-5.611
+  swatch rmse vs printed: 0.18
+  probe channel mean = 135.12
+  probe -> reference frame = 131.06
+  raw=6.94  clipped=6.94  range=[6.8, 8.2]
+
+=== H2O2 ===
+  color_cells=14 measure_cells=8
+  ref: best_channel=B ref_r=-0.629
+  runtime r (tgt_ch vs y) = -0.808  (sign OK)
+  t2r linear: slope=0.788 intercept=17.066
+  swatch rmse vs printed: 9.57
+  probe channel mean = 145.62
+  probe -> reference frame = 131.75
+  raw=24.36  clipped=24.36  range=[5.0, 50.0]
+
+=== PHMB ===
+  color_cells=6 measure_cells=8
+  ref: best_channel=L ref_r=0.952
+  runtime r (tgt_ch vs y) = -0.158  (sign FLIP)
+  REJECTED: sign mismatch

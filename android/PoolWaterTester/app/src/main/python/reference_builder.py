@@ -168,6 +168,76 @@ def _filter_dense_cells(cells, k_neighbors: int = 6, radius_factor: float = 2.5)
     return [cells[i] for i in keep_idx]
 
 
+def _drop_boundary_outliers(cells, count_floor_frac: float = 0.5,
+                            gap_factor: float = 1.5):
+    """Drop sparse boundary columns/rows from the dense cluster.
+
+    A real card grid has uniform spacing — every column has roughly the same
+    number of cells, every row likewise. A stray rectangle from clutter that
+    survived the density filter typically shows up as a 1-cell-only column or
+    row at the EDGE of the cell-bbox. Dropping it pulls the bbox back to the
+    actual card.
+
+    Algorithm:
+      1. Project cells into the card frame (rotate by median per-cell angle).
+      2. 1-D-cluster rx values into columns and ry into rows. A gap larger
+         than `gap_factor * median(cell_short)` between adjacent values
+         starts a new cluster.
+      3. Boundary clusters (first and last in sort order) whose member count
+         is < count_floor_frac * median(counts) are flagged.
+      4. Drop the cells in those flagged boundary clusters.
+
+    Returns (kept_cells, dropped_cells) — dropped is for debug visualization.
+    """
+    if len(cells) < 6:
+        return cells, []
+    pts = np.array([(c[0], c[1]) for c in cells], dtype=np.float32)
+    cell_angles = np.array([c[5] for c in cells], dtype=np.float32)
+    angle_deg = float(np.median(cell_angles))
+    theta = np.deg2rad(angle_deg)
+    cos_t, sin_t = np.cos(theta), np.sin(theta)
+    R = np.array([[cos_t, sin_t], [-sin_t, cos_t]], dtype=np.float32)
+    centroid = pts.mean(axis=0)
+    rotated = (pts - centroid) @ R.T
+    rx_arr = rotated[:, 0]
+    ry_arr = rotated[:, 1]
+
+    cell_short = float(np.median([min(c[2], c[3]) for c in cells]))
+    gap = cell_short * gap_factor
+
+    def _cluster_1d(values):
+        order = np.argsort(values)
+        clusters = [[int(order[0])]]
+        for i in range(1, len(order)):
+            if values[order[i]] - values[order[i - 1]] > gap:
+                clusters.append([])
+            clusters[-1].append(int(order[i]))
+        return clusters
+
+    rx_clusters = _cluster_1d(rx_arr)
+    ry_clusters = _cluster_1d(ry_arr)
+
+    drop_idx = set()
+
+    def _flag_boundaries(clusters):
+        if len(clusters) < 3:
+            return  # Need >=3 columns/rows so removing a boundary keeps a grid
+        counts = [len(c) for c in clusters]
+        median_count = float(np.median(counts))
+        threshold = median_count * count_floor_frac
+        if counts[0] < threshold:
+            drop_idx.update(clusters[0])
+        if counts[-1] < threshold:
+            drop_idx.update(clusters[-1])
+
+    _flag_boundaries(rx_clusters)
+    _flag_boundaries(ry_clusters)
+
+    kept = [c for i, c in enumerate(cells) if i not in drop_idx]
+    dropped = [c for i, c in enumerate(cells) if i in drop_idx]
+    return kept, dropped
+
+
 def _filter_cells_by_size(cells, tolerance: float = 0.40, n_bins: int = 20):
     """Behalte nur Zellen, deren kurze Seite zum Histogramm-Modus passt.
 
@@ -220,8 +290,8 @@ def _refine_quad_via_hough(gray: np.ndarray, edges_full: np.ndarray, cells,
                               threshold=threshold,
                               minLineLength=min_line_len,
                               maxLineGap=10)
-    if lines_p is None or len(lines_p) < 4:
-        return None
+    if lines_p is None:
+        lines_p = []
 
     card_angle_rad = np.deg2rad(card_angle_deg)
     cos_t, sin_t = float(np.cos(card_angle_rad)), float(np.sin(card_angle_rad))
@@ -263,42 +333,110 @@ def _refine_quad_via_hough(gray: np.ndarray, edges_full: np.ndarray, cells,
     def _is_vertical(seg_deg):
         return 75.0 <= seg_deg <= 105.0
 
-    horizontal_top, horizontal_bottom = [], []
-    vertical_left, vertical_right = [], []
-    accepted = []
+    def _categorize(lines):
+        top_, bottom_, left_, right_, acc_ = [], [], [], [], []
+        for line in lines:
+            x1, y1, x2, y2 = (float(v) for v in line[0])
+            mx = (x1 + x2) * 0.5
+            my = (y1 + y2) * 0.5
+            if _is_inside_inner(mx, my):
+                continue
+            seg_angle = float(math.atan2(y2 - y1, x2 - x1)) % np.pi
+            seg_deg = np.degrees(seg_angle)
+            rx, ry = _to_card_frame(mx, my)
+            if _is_horizontal(seg_deg) and _ang_dist(seg_angle, h_target) < angle_tol:
+                if cmin[1] - margin_hi <= ry <= cmin[1] - margin_lo:
+                    top_.append((x1, y1, x2, y2, seg_angle, ry))
+                    acc_.append(('top', x1, y1, x2, y2))
+                elif cmax[1] + margin_lo <= ry <= cmax[1] + margin_hi:
+                    bottom_.append((x1, y1, x2, y2, seg_angle, ry))
+                    acc_.append(('bottom', x1, y1, x2, y2))
+            elif _is_vertical(seg_deg) and _ang_dist(seg_angle, v_target) < angle_tol:
+                if cmin[0] - margin_hi <= rx <= cmin[0] - margin_lo:
+                    left_.append((x1, y1, x2, y2, seg_angle, rx))
+                    acc_.append(('left', x1, y1, x2, y2))
+                elif cmax[0] + margin_lo <= rx <= cmax[0] + margin_hi:
+                    right_.append((x1, y1, x2, y2, seg_angle, rx))
+                    acc_.append(('right', x1, y1, x2, y2))
+        return top_, bottom_, left_, right_, acc_
 
-    for line in lines_p:
-        x1, y1, x2, y2 = (float(v) for v in line[0])
-        mx = (x1 + x2) * 0.5
-        my = (y1 + y2) * 0.5
-        if _is_inside_inner(mx, my):
-            continue
+    horizontal_top, horizontal_bottom, vertical_left, vertical_right, accepted = \
+        _categorize(lines_p)
 
-        seg_angle = float(math.atan2(y2 - y1, x2 - x1)) % np.pi
-        seg_deg = np.degrees(seg_angle)
-        rx, ry = _to_card_frame(mx, my)
+    # Per-side relaxed retry: if a side has zero candidates after the normal
+    # pass, run HoughLinesP again on the same edges with halved threshold +
+    # minLineLength. Only the empty sides absorb the new candidates — sides
+    # that already had hits keep their stricter (higher-quality) results.
+    if not (horizontal_top and horizontal_bottom
+            and vertical_left and vertical_right):
+        relaxed_lines = cv2.HoughLinesP(
+            edges, rho=1, theta=np.pi / 180,
+            threshold=max(threshold // 3, 10),
+            minLineLength=max(min_line_len // 2, 25),
+            maxLineGap=15,
+        )
+        if relaxed_lines is not None:
+            r_top, r_bot, r_left, r_right, r_acc = _categorize(relaxed_lines)
+            if not horizontal_top:
+                horizontal_top = r_top
+                accepted.extend(s for s in r_acc if s[0] == 'top')
+            if not horizontal_bottom:
+                horizontal_bottom = r_bot
+                accepted.extend(s for s in r_acc if s[0] == 'bottom')
+            if not vertical_left:
+                vertical_left = r_left
+                accepted.extend(s for s in r_acc if s[0] == 'left')
+            if not vertical_right:
+                vertical_right = r_right
+                accepted.extend(s for s in r_acc if s[0] == 'right')
 
-        if _is_horizontal(seg_deg) and _ang_dist(seg_angle, h_target) < angle_tol:
-            if cmin[1] - margin_hi <= ry <= cmin[1] - margin_lo:
-                horizontal_top.append((x1, y1, x2, y2, seg_angle, ry))
-                accepted.append(('top', x1, y1, x2, y2))
-            elif cmax[1] + margin_lo <= ry <= cmax[1] + margin_hi:
-                horizontal_bottom.append((x1, y1, x2, y2, seg_angle, ry))
-                accepted.append(('bottom', x1, y1, x2, y2))
-        elif _is_vertical(seg_deg) and _ang_dist(seg_angle, v_target) < angle_tol:
-            if cmin[0] - margin_hi <= rx <= cmin[0] - margin_lo:
-                vertical_left.append((x1, y1, x2, y2, seg_angle, rx))
-                accepted.append(('left', x1, y1, x2, y2))
-            elif cmax[0] + margin_lo <= rx <= cmax[0] + margin_hi:
-                vertical_right.append((x1, y1, x2, y2, seg_angle, rx))
-                accepted.append(('right', x1, y1, x2, y2))
+    # Per-side selection: pick the candidate line whose position is closest
+    # to the MEDIAN of the candidates on that side.
+    def _median_pick(items, key_idx):
+        if not items:
+            return None
+        vals = sorted(it[key_idx] for it in items)
+        median = vals[len(vals) // 2]
+        return min(items, key=lambda it: abs(it[key_idx] - median))
 
-    have_all_sides = bool(horizontal_top and horizontal_bottom
-                          and vertical_left and vertical_right)
-    top = min(horizontal_top, key=lambda l: l[5]) if horizontal_top else None
-    bottom = max(horizontal_bottom, key=lambda l: l[5]) if horizontal_bottom else None
-    left = min(vertical_left, key=lambda l: l[5]) if vertical_left else None
-    right = max(vertical_right, key=lambda l: l[5]) if vertical_right else None
+    top = _median_pick(horizontal_top, 5)
+    bottom = _median_pick(horizontal_bottom, 5)
+    left = _median_pick(vertical_left, 5)
+    right = _median_pick(vertical_right, 5)
+
+    # Synthesize a line from cell-bbox + half_cell margin for any side that
+    # is STILL empty. Card-frame to image-frame conversion: a card-frame
+    # point (rx, ry) maps to image as cell_centroid + (rx, ry) @ R.
+    def _card_to_img(rx_, ry_):
+        return (rx_ * cos_t - ry_ * sin_t + cell_centroid[0],
+                rx_ * sin_t + ry_ * cos_t + cell_centroid[1])
+
+    half = 0.5 * cell_short
+    synth_sides = set()
+    if top is None:
+        ry0 = cmin[1] - half
+        p1 = _card_to_img(-1000.0, ry0)
+        p2 = _card_to_img(+1000.0, ry0)
+        top = (p1[0], p1[1], p2[0], p2[1], h_target, ry0)
+        synth_sides.add('top')
+    if bottom is None:
+        ry0 = cmax[1] + half
+        p1 = _card_to_img(-1000.0, ry0)
+        p2 = _card_to_img(+1000.0, ry0)
+        bottom = (p1[0], p1[1], p2[0], p2[1], h_target, ry0)
+        synth_sides.add('bottom')
+    if left is None:
+        rx0 = cmin[0] - half
+        p1 = _card_to_img(rx0, -1000.0)
+        p2 = _card_to_img(rx0, +1000.0)
+        left = (p1[0], p1[1], p2[0], p2[1], v_target, rx0)
+        synth_sides.add('left')
+    if right is None:
+        rx0 = cmax[0] + half
+        p1 = _card_to_img(rx0, -1000.0)
+        p2 = _card_to_img(rx0, +1000.0)
+        right = (p1[0], p1[1], p2[0], p2[1], v_target, rx0)
+        synth_sides.add('right')
 
     if _DEBUG_DIR:
         vis_lines = cv2.cvtColor(crop, cv2.COLOR_GRAY2BGR)
@@ -310,17 +448,24 @@ def _refine_quad_via_hough(gray: np.ndarray, edges_full: np.ndarray, cells,
         for side, ax1, ay1, ax2, ay2 in accepted:
             cv2.line(vis_lines, (int(ax1), int(ay1)), (int(ax2), int(ay2)),
                      side_color[side], 2)
-        chosen_lines = [(top, (0, 0, 255)), (bottom, (0, 0, 255)),
-                        (left, (255, 0, 255)), (right, (255, 0, 255))]
-        for chosen, color in chosen_lines:
+        chosen_lines = [('top', top, (0, 0, 255)), ('bottom', bottom, (0, 0, 255)),
+                        ('left', left, (255, 0, 255)), ('right', right, (255, 0, 255))]
+        for side_name, chosen, color in chosen_lines:
             if chosen is None:
                 continue
             cx1, cy1, cx2, cy2 = chosen[0], chosen[1], chosen[2], chosen[3]
-            cv2.line(vis_lines, (int(cx1), int(cy1)), (int(cx2), int(cy2)), color, 3)
+            if side_name in synth_sides:
+                # Dashed white = synthesized from cell-bbox + half_cell margin
+                pts = np.linspace([cx1, cy1], [cx2, cy2], num=40)
+                for i in range(0, len(pts) - 1, 2):
+                    cv2.line(vis_lines,
+                             (int(pts[i][0]), int(pts[i][1])),
+                             (int(pts[i + 1][0]), int(pts[i + 1][1])),
+                             (255, 255, 255), 2)
+            else:
+                cv2.line(vis_lines, (int(cx1), int(cy1)),
+                         (int(cx2), int(cy2)), color, 3)
         _debug_save('26b_hough.jpg', vis_lines)
-
-    if not have_all_sides:
-        return None
 
     def _line_intersect(l1, l2):
         x1, y1, x2, y2 = l1[0], l1[1], l1[2], l1[3]
@@ -400,6 +545,21 @@ def _detect_reference_quad(gray: np.ndarray, bgr: Optional[np.ndarray] = None) -
             cv2.rectangle(vis, (cx - cw // 2, cy - ch // 2),
                           (cx + cw // 2, cy + ch // 2), (0, 200, 0), 2)
         _debug_save('23_dense.jpg', vis)
+    if len(cluster) < 6:
+        return None
+
+    # Drop sparse boundary rows/columns — kills outliers like a stray
+    # background rectangle that passed density. Strict subset of cluster.
+    cluster, dropped = _drop_boundary_outliers(cluster)
+    if _DEBUG_DIR:
+        vis = cv2.cvtColor(gray, cv2.COLOR_GRAY2BGR)
+        for cx, cy, cw, ch, _, _ in cluster:
+            cv2.rectangle(vis, (cx - cw // 2, cy - ch // 2),
+                          (cx + cw // 2, cy + ch // 2), (0, 200, 0), 2)
+        for cx, cy, cw, ch, _, _ in dropped:
+            cv2.rectangle(vis, (cx - cw // 2, cy - ch // 2),
+                          (cx + cw // 2, cy + ch // 2), (0, 0, 255), 2)
+        _debug_save('23b_grid_filtered.jpg', vis)
     if len(cluster) < 6:
         return None
 

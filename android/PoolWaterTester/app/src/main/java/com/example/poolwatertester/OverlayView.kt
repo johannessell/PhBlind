@@ -148,7 +148,7 @@ class OverlayView @JvmOverloads constructor(
     }
 
     fun setTargetAspect(aspect: Float) {
-        if (aspect > 0f && kotlin.math.abs(aspect - targetAspect) > 0.01f) {
+        if (aspect > 0f && aspect != targetAspect) {
             targetAspect = aspect
             postInvalidate()
         }
@@ -201,7 +201,7 @@ class OverlayView @JvmOverloads constructor(
         val barX = (viewW - barW) / 2f
         val barY = viewH - 120f
         canvas.drawRect(barX, barY, barX + barW, barY + barH, barBgPaint)
-        val frac = progress.toFloat() / required.toFloat()
-        canvas.drawRect(barX, barY, barX + barW * frac.coerceIn(0f, 1f), barY + barH, barFgPaint)
+        val barFrac = progress.toFloat() / required.toFloat()
+        canvas.drawRect(barX, barY, barX + barW * barFrac.coerceIn(0f, 1f), barY + barH, barFgPaint)
     }
 }

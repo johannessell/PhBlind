@@ -2,7 +2,13 @@
   "permissions": {
     "allow": [
       "Read(//c/Users/johan/.claude/projects/c--Users-johan-PycharmProjects-PhBlind/**)",
-      "Read(//tmp/**)"
+      "Read(//tmp/**)",
+      "Bash(./gradlew compileDebugKotlin)",
+      "Bash(python -c ' *)",
+      "Read(//c/Users/johan/AppData/Local/Android/Sdk/platform-tools/**)",
+      "Bash(powershell -Command 'Get-ChildItem -Path '\\\\''C:\\\\'\\\\'','\\\\''C:\\\\Users\\\\johan'\\\\'' -Recurse -Filter '\\\\''adb.exe'\\\\'' -ErrorAction SilentlyContinue -Depth 6 2>$null | Select-Object -First 5 -ExpandProperty FullName')",
+      "Bash(python debug_measurement.py)",
+      "Bash(python debug_hough_compare.py)"
     ]
   }
 }

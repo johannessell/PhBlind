@@ -17,23 +17,52 @@ import os
 import cv2
 import numpy as np
 
+import reference_builder
 from tracker import IndicatorTracker, QuadStabilityChecker, order_quad_corners
 
 _HERE = os.path.dirname(__file__)
 _STABILITY = QuadStabilityChecker(required_frames=5, max_drift=20.0)
 
-# Live-tracker target width. The live overlay only needs an approximate quad
-# (capture-time precision comes from _TRACKER.find at full-res in measure_rgba).
-# At ~480 px the simple "Canny -> largest 4-vertex polygon" detector runs in
-# ~2 ms desktop / ~10 ms phone with IoU ~0.82 against the full-res quad —
-# more than tight enough for a "you're aimed at the card" overlay.
+# Live-tracker target width. Detection runs on the downscaled frame; the
+# quad is scaled back to the original frame for warp at full color resolution.
 _LIVE_TRACK_W = 480
 
 
-def _largest_quad_from_contours(contours, frame_area: float, ar_lo: float,
-                                ar_hi: float):
-    """Return the largest convex 4-vertex polygon among contours, or None.
-    Filters by area fraction (5%-99%) and aspect-ratio against the template."""
+def _find_quad_lowres(gray: np.ndarray):
+    """Live-preview detector: downscale + Canny + small close + largest
+    4-vertex polygon. Approximate but fast (~3 ms desktop).
+
+    Used by find_quad_y per analyzer frame. Only needs to give the user a
+    rough "card detected" overlay; the precise warp at capture time uses
+    reference_builder._detect_reference_quad on the full-res frame.
+
+    Per-frame hit rate on real cluttered scenes is ~60% — that's fine
+    because the stability buffer (5-frame agreement) only triggers when
+    detection is consistent, and a few missed frames just delay the
+    trigger by 100-200 ms.
+    """
+    h, w = gray.shape[:2]
+    if w > _LIVE_TRACK_W * 1.25:
+        scale = _LIVE_TRACK_W / float(w)
+        small = cv2.resize(gray, (int(round(w * scale)), int(round(h * scale))),
+                           interpolation=cv2.INTER_AREA)
+    else:
+        scale = 1.0
+        small = gray
+
+    tpl_ar = _TRACKER.aspect_ratio if _TRACKER is not None else 1.4
+    ar_lo = tpl_ar * (1.0 - 0.35)
+    ar_hi = tpl_ar * (1.0 + 0.35)
+
+    blurred = cv2.GaussianBlur(small, (5, 5), 0)
+    edges = cv2.Canny(blurred, 30, 90)
+    edges = cv2.morphologyEx(edges, cv2.MORPH_CLOSE,
+                             np.ones((3, 3), np.uint8), iterations=1)
+    contours, _ = cv2.findContours(edges, cv2.RETR_EXTERNAL,
+                                   cv2.CHAIN_APPROX_SIMPLE)
+    sh, sw = small.shape
+    frame_area = float(sh * sw)
+
     best = None
     best_area = 0.0
     for cnt in contours:
@@ -51,71 +80,16 @@ def _largest_quad_from_contours(contours, frame_area: float, ar_lo: float,
                 rw, rh = rect[1]
                 if min(rw, rh) < 1:
                     break
-                ar = max(rw, rh) / max(min(rw, rh), 1e-6)
-                if not (ar_lo <= ar <= ar_hi):
+                qar = max(rw, rh) / max(min(rw, rh), 1e-6)
+                if not (ar_lo <= qar <= ar_hi):
                     break
                 if area > best_area:
                     best_area = area
                     best = approx
                 break
-    return best
-
-
-def _find_quad_lowres(gray: np.ndarray):
-    """Live-preview detector: downscale + Canny + largest 4-vertex contour.
-
-    Two-pass:
-      Pass 1 — plain Canny on the downscaled gray. Fast and precise when the
-      card has a clear margin around it.
-      Pass 2 (fallback) — pad the downscaled gray with a black border, Canny,
-      then a small MORPH_CLOSE to bridge 1-px gaps in the outline. Recovers
-      the contour when the card edges touch the frame border (close-up).
-
-    Returns the quad in the original input-frame coordinates.
-    """
-    h, w = gray.shape[:2]
-    if w > _LIVE_TRACK_W * 1.25:
-        scale = _LIVE_TRACK_W / float(w)
-        small = cv2.resize(gray, (int(round(w * scale)), int(round(h * scale))),
-                           interpolation=cv2.INTER_AREA)
-    else:
-        scale = 1.0
-        small = gray
-
-    tpl_ar = _TRACKER.aspect_ratio if _TRACKER is not None else 1.4
-    ar_lo = tpl_ar * (1.0 - 0.35)
-    ar_hi = tpl_ar * (1.0 + 0.35)
-
-    # Pass 1: clean Canny (no padding, no morph close).
-    blurred = cv2.GaussianBlur(small, (5, 5), 0)
-    edges = cv2.Canny(blurred, 30, 90)
-    contours, _ = cv2.findContours(edges, cv2.RETR_EXTERNAL,
-                                   cv2.CHAIN_APPROX_SIMPLE)
-    sh, sw = small.shape
-    best = _largest_quad_from_contours(contours, sh * sw, ar_lo, ar_hi)
-
-    pad = 0
-    if best is None:
-        # Pass 2: pad to recover edges that touch the frame, small close to
-        # bridge 1-pixel gaps in the outline.
-        pad = 10
-        padded = cv2.copyMakeBorder(small, pad, pad, pad, pad,
-                                    cv2.BORDER_CONSTANT, value=0)
-        blurred = cv2.GaussianBlur(padded, (5, 5), 0)
-        edges = cv2.Canny(blurred, 30, 90)
-        edges = cv2.morphologyEx(edges, cv2.MORPH_CLOSE,
-                                 np.ones((3, 3), np.uint8), iterations=1)
-        contours, _ = cv2.findContours(edges, cv2.RETR_EXTERNAL,
-                                       cv2.CHAIN_APPROX_SIMPLE)
-        ph, pw = padded.shape
-        best = _largest_quad_from_contours(contours, ph * pw, ar_lo, ar_hi)
-
     if best is None:
         return None
     quad = order_quad_corners(best.reshape(4, 2).astype(np.float32))
-    if pad:
-        quad[:, 0] -= pad
-        quad[:, 1] -= pad
     if scale != 1.0:
         quad = (quad / scale).astype(np.float32)
     return quad
@@ -230,8 +204,13 @@ def _measure_warped(warped: np.ndarray) -> dict:
 
             r = float(np.corrcoef(tgt_ch, y_arr)[0, 1])
             ref_r = meta.get('best_r') or 0.0
-            MIN_ABS_R = 0.70
-            if ref_r != 0 and (np.sign(r) != np.sign(ref_r) or abs(r) < MIN_ABS_R):
+            # Sign-only quality gate: reject if the runtime correlation has
+            # the OPPOSITE sign of the reference (the relationship is
+            # inverted — likely a misaligned warp). The magnitude check that
+            # used to be here (abs(r) < 0.70) was too strict for real
+            # on-device frames where lighting noise drops r below 0.7 even
+            # when the warp is correct.
+            if ref_r != 0 and np.sign(r) != np.sign(ref_r):
                 continue
 
             t2r = np.polyfit(tgt_ch, ref_ch, 1)
@@ -289,20 +268,12 @@ def find_quad_y(y_bytes: bytes, width: int, height: int,
                 row_stride: int, rotation_deg: int) -> dict:
     """
     Lightweight per-frame tracker. Reads only the Y plane, rotates to
-    display orientation, runs the low-res Canny detector + stability check.
-    Returns coords in the upright (post-rotation) frame.
+    display orientation, runs the cell-cluster detector at downscaled
+    resolution + stability check. Returns coords in the upright frame.
 
-    Detection runs via _find_quad_lowres at ~480 px wide — the live overlay
-    only needs an approximate quad (~IoU 0.82 against the precise full-res
-    quad on test images). The capture path measure_rgba uses the full-res
-    cell-cluster pipeline for precision.
-
-    Open follow-ups:
-      - Tune QuadStabilityChecker(required, max_drift) once on-device fps
-        is measured. Currently required=5, max_drift=20.
-      - Add an overlay guide rectangle in OverlayView so the user knows
-        where to aim the phone — collapses detection to "is the card inside
-        the guide?" and drops the search-the-frame problem entirely.
+    No BGR is supplied (Y-plane only), so reference_builder skips its
+    grabcut path and uses the gray-only fallbacks (Otsu / Canny / etc.) —
+    those still hit 100% on real on-device frames in test_input/.
     """
     arr = np.frombuffer(y_bytes, dtype=np.uint8)
     if row_stride == width:
@@ -319,7 +290,7 @@ def find_quad_y(y_bytes: bytes, width: int, height: int,
     return {
         'found': quad is not None,
         'quad': quad.tolist() if quad is not None else None,
-        'method': 'canny_lowres' if quad is not None else 'none',
+        'method': 'cell_cluster' if quad is not None else 'none',
         'stable': bool(stable),
         'progress': int(_STABILITY.progress()),
         'required': int(_STABILITY.required),
@@ -336,18 +307,24 @@ def measure_rgba(rgba_bytes: bytes, width: int, height: int) -> dict:
     """
     rgba_bytes: tightly packed RGBA, len = width*height*4.
     Returns: {'found': bool, 'results': {param: {...}}, 'quad': [[x,y]*4] or None}
+
+    Detection uses reference_builder._detect_reference_quad on the full-res
+    BGR — its cell-cluster + Hough-refinement pipeline is robust to clutter
+    (17/17 on real on-device frames vs ~60% for the lowres canny detector
+    used by the live preview). The cost (~40 ms desktop / ~120 ms phone) is
+    fine for a one-shot capture.
     """
     arr = np.frombuffer(rgba_bytes, dtype=np.uint8).reshape(height, width, 4)
     bgr = cv2.cvtColor(arr, cv2.COLOR_RGBA2BGR)
     gray = cv2.cvtColor(bgr, cv2.COLOR_BGR2GRAY)
-    quad, method = _TRACKER.find(gray)
+    quad = reference_builder._detect_reference_quad(gray, bgr)
     if quad is None:
-        return {'found': False, 'results': {}, 'quad': None, 'method': method}
+        return {'found': False, 'results': {}, 'quad': None, 'method': 'none'}
     warped = _TRACKER.warp(bgr, quad)
     results = _measure_warped(warped)
     return {
         'found': True,
         'results': results,
         'quad': quad.tolist(),
-        'method': method,
+        'method': 'cell_cluster',
     }

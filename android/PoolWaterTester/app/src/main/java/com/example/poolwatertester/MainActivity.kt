@@ -61,11 +61,41 @@ class MainActivity : AppCompatActivity() {
         val py = Python.getInstance()
         analyzer = py.getModule("analyzer")
         measurement = py.getModule("measurement")
+        cameraExecutor = Executors.newSingleThreadExecutor()
+
+        binding.measureButton.setOnClickListener {
+            if (locked) resetState() else runMeasurement()
+        }
+        binding.editReferenceButton.setOnClickListener {
+            startActivity(android.content.Intent(this, ReferenceActivity::class.java))
+        }
+        binding.saveTrainingButton.setOnClickListener { saveTrainingFrame() }
+
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA)
+            != PackageManager.PERMISSION_GRANTED
+        ) requestPermission.launch(Manifest.permission.CAMERA)
+        // Camera bind happens in onResume — Android lifecycle on return from
+        // ReferenceActivity is A.onResume → B.onStop, so B still holds the
+        // camera here. Re-binding in onResume (which calls unbindAll first)
+        // is the only reliable way to re-acquire after navigation.
+    }
+
+    override fun onResume() {
+        super.onResume()
+        reloadReference()
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA)
+            == PackageManager.PERMISSION_GRANTED
+        ) startCamera()
+    }
+
+    private fun reloadReference() {
+        // Re-runs each onResume so a reference saved in ReferenceActivity is
+        // picked up when the user returns. Also pushes the template's aspect
+        // ratio into the overlay's guide rectangle.
         val refDir = java.io.File(filesDir, "reference").apply { mkdirs() }
         try {
             val info = measurement.callAttr("init", refDir.absolutePath)
             Log.i(TAG, "measurement init: $info")
-            // Sync the overlay guide rectangle to the loaded template's aspect.
             val infoMap = info.asMap()
             val tplW = infoMap[PyObject.fromJava("width")]?.toInt() ?: 0
             val tplH = infoMap[PyObject.fromJava("height")]?.toInt() ?: 0
@@ -76,19 +106,6 @@ class MainActivity : AppCompatActivity() {
         } catch (e: Exception) {
             Log.e(TAG, "measurement init failed", e)
         }
-        cameraExecutor = Executors.newSingleThreadExecutor()
-
-        binding.measureButton.setOnClickListener {
-            if (locked) resetState() else runMeasurement()
-        }
-        binding.editReferenceButton.setOnClickListener {
-            startActivity(android.content.Intent(this, ReferenceActivity::class.java))
-        }
-
-        if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA)
-            == PackageManager.PERMISSION_GRANTED
-        ) startCamera()
-        else requestPermission.launch(Manifest.permission.CAMERA)
     }
 
     private fun startCamera() {
@@ -234,6 +251,37 @@ class MainActivity : AppCompatActivity() {
                     measuring = false
                 }
             })
+    }
+
+    private fun saveTrainingFrame() {
+        // Captures the full-res sensor frame and writes it to the app's
+        // external files dir as JPG. Works regardless of detection state, so
+        // the user can specifically save frames where the live tracker
+        // misbehaves. Pull with:
+        //   adb pull /sdcard/Android/data/com.example.poolwatertester/files/training/
+        val capture = imageCapture ?: return
+        binding.saveTrainingButton.isEnabled = false
+        val dir = java.io.File(getExternalFilesDir(null), "training").apply { mkdirs() }
+        val name = "frame_${System.currentTimeMillis()}.jpg"
+        val outFile = java.io.File(dir, name)
+        val outOpts = ImageCapture.OutputFileOptions.Builder(outFile).build()
+        capture.takePicture(
+            outOpts,
+            ContextCompat.getMainExecutor(this),
+            object : ImageCapture.OnImageSavedCallback {
+                override fun onImageSaved(result: ImageCapture.OutputFileResults) {
+                    Log.i(TAG, "training frame saved: ${outFile.absolutePath}")
+                    binding.status.text = "saved ${outFile.name}"
+                    binding.saveTrainingButton.isEnabled = true
+                }
+
+                override fun onError(exc: ImageCaptureException) {
+                    Log.e(TAG, "training save failed", exc)
+                    binding.status.text = "save error: ${exc.message}"
+                    binding.saveTrainingButton.isEnabled = true
+                }
+            }
+        )
     }
 
     private fun rotateBitmap(src: Bitmap, degrees: Int): Bitmap {

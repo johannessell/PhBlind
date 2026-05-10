@@ -1,26 +1,11 @@
+=== grid: 8x7 (OK / expected 8x7) ===
 
 === pH ===
-  color_cells=7 measure_cells=8
-  ref: best_channel=A ref_r=0.98
-  runtime r (tgt_ch vs y) = 0.975  (sign OK)
-  t2r linear: slope=0.820 intercept=19.577
-  swatch rmse vs printed: 0.09
-  probe channel mean = 134.50
-  probe -> reference frame = 129.89
-  raw=6.84  clipped=6.84  range=[6.8, 8.2]
-
+  picked projection: hue_lch  r=-0.998  rmse=0.02
+  value: 6.8
 === H2O2 ===
-  color_cells=14 measure_cells=8
-  ref: best_channel=B ref_r=-0.629
-  runtime r (tgt_ch vs y) = -0.782  (sign OK)
-  t2r linear: slope=0.785 intercept=17.829
-  swatch rmse vs printed: 10.19
-  probe channel mean = 147.75
-  probe -> reference frame = 133.87
-  raw=20.96  clipped=20.96  range=[5.0, 50.0]
-
+  picked projection: pc1_lab  r=-0.971  rmse=2.161
+  value: 8.08
 === PHMB ===
-  color_cells=6 measure_cells=8
-  ref: best_channel=L ref_r=0.952
-  runtime r (tgt_ch vs y) = -0.744  (sign FLIP)
-  REJECTED: sign mismatch
+  picked projection: pc1_ab  r=-0.937  rmse=4.423
+  value: 24.5

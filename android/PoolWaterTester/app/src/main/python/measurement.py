@@ -99,6 +99,8 @@ _TEMPLATE = None
 _TEMPLATE_GRAY = None
 _TRACKER: IndicatorTracker = None  # type: ignore[assignment]
 _LOADED_FROM: str = ''
+_EXPECTED_ROWS: int = 0
+_EXPECTED_COLS: int = 0
 
 
 def _resolve_paths(data_dir: str):
@@ -119,6 +121,7 @@ def init(data_dir: str = '') -> dict:
     Safe to call multiple times; resets the stability buffer.
     """
     global _REF, _TEMPLATE, _TEMPLATE_GRAY, _TRACKER, _LOADED_FROM
+    global _EXPECTED_ROWS, _EXPECTED_COLS
 
     ref_path, tpl_path, source = _resolve_paths(data_dir)
     with open(ref_path, 'r', encoding='utf-8') as f:
@@ -134,6 +137,20 @@ def init(data_dir: str = '') -> dict:
     _STABILITY.reset()
     _LOADED_FROM = source
 
+    cells = ref.get('cells', [])
+    # Older references don't store col_idx (it's None) — derive from x
+    # positions within each row, in left-to-right order.
+    if cells and all(c.get('col_idx') is None for c in cells):
+        by_row: dict = {}
+        for c in cells:
+            by_row.setdefault(c['row_idx'], []).append(c)
+        for row_cells in by_row.values():
+            row_cells.sort(key=lambda c: c['x'])
+            for ci, c in enumerate(row_cells):
+                c['col_idx'] = ci
+    _EXPECTED_ROWS = (max(c['row_idx'] for c in cells) + 1) if cells else 0
+    _EXPECTED_COLS = (max(c.get('col_idx') or 0 for c in cells) + 1) if cells else 0
+
     return {
         'source': source,
         'ref_path': ref_path,
@@ -142,6 +159,8 @@ def init(data_dir: str = '') -> dict:
         'height': int(_TEMPLATE.shape[0]),
         'n_cells': len(_REF.get('cells', [])),
         'parameters': [p.get('name') for p in _REF.get('parameters', [])],
+        'expected_rows': _EXPECTED_ROWS,
+        'expected_cols': _EXPECTED_COLS,
     }
 
 
@@ -150,15 +169,281 @@ def init(data_dir: str = '') -> dict:
 init('')
 
 
-def _measure_warped(warped: np.ndarray) -> dict:
+def _detect_warped_grid(warped_bgr: np.ndarray):
+    """Re-detect the cell grid in the warped image and assign each detected
+    cell a (row_idx, col_idx). Returns:
+      - dict[(row_idx, col_idx)] -> (cx, cy, w, h)
+      - (rows, cols) tuple of detected counts
+      - list of all detected cells (for debug overlay)
+    Or (None, (rows, cols), all_cells) if the detected shape doesn't match
+    (expected_rows, expected_cols).
+
+    Reuses the existing reference_builder cell-detection helpers so we get
+    identical filtering as the original calibration. The point is to sample
+    at the runtime-detected positions instead of trusting reference.json's
+    pixel coords.
+    """
+    gray = cv2.cvtColor(warped_bgr, cv2.COLOR_BGR2GRAY)
+    edges = reference_builder._compute_edges(gray)
+    cells = reference_builder._detect_cell_rects(edges)
+    if len(cells) < 6:
+        return None, (0, 0), cells
+    sized = reference_builder._filter_cells_by_size(cells)
+    if len(sized) < 6:
+        return None, (0, 0), sized
+    dense = reference_builder._filter_dense_cells(sized, k_neighbors=4)
+    if len(dense) < 6:
+        return None, (0, 0), dense
+    clean, _ = reference_builder._drop_boundary_outliers(dense)
+    if len(clean) < 6:
+        return None, (0, 0), clean
+
+    # 1-D cluster by image-frame y (rows top→bottom) and x (cols left→right).
+    # We KNOW the expected count, so split at the (expected - 1) largest
+    # gaps between consecutive sorted positions — gives exactly the right
+    # number of clusters whenever the cells span the full grid. Reject only
+    # if any resulting cluster is empty (cells didn't span the full grid).
+    def _cluster_to_n(positions, expected):
+        order = np.argsort(positions)
+        if expected <= 1 or len(order) < expected:
+            return [list(map(int, order))]
+        sorted_vals = positions[order]
+        gaps = np.diff(sorted_vals)
+        # indices of the (expected - 1) largest gaps, ascending order
+        boundaries = sorted(np.argsort(gaps)[-(expected - 1):].tolist())
+        clusters = []
+        start = 0
+        for b in boundaries:
+            clusters.append([int(order[i]) for i in range(start, b + 1)])
+            start = b + 1
+        clusters.append([int(order[i]) for i in range(start, len(order))])
+        return clusters
+
+    cy_arr = np.array([c[1] for c in clean], dtype=np.float32)
+    cx_arr = np.array([c[0] for c in clean], dtype=np.float32)
+    row_clusters = _cluster_to_n(cy_arr, _EXPECTED_ROWS)
+    col_clusters = _cluster_to_n(cx_arr, _EXPECTED_COLS)
+    rows, cols = len(row_clusters), len(col_clusters)
+
+    # Reject if the targeted split couldn't produce the expected counts
+    # (too few cells overall) or any cluster ended up empty.
+    if (rows, cols) != (_EXPECTED_ROWS, _EXPECTED_COLS):
+        return None, (rows, cols), clean
+    if any(len(c) == 0 for c in row_clusters) \
+            or any(len(c) == 0 for c in col_clusters):
+        return None, (rows, cols), clean
+
+    # Build cell_idx -> (row_idx, col_idx)
+    row_of = {}
+    for ri, members in enumerate(row_clusters):
+        for m in members:
+            row_of[m] = ri
+    col_of = {}
+    for ci, members in enumerate(col_clusters):
+        for m in members:
+            col_of[m] = ci
+
+    # Per (row, col) slot, keep cell whose centroid is closest to that
+    # row's median cy and that column's median cx (handles a rare case
+    # where two cells fall in the same slot).
+    row_med = [float(np.median(cy_arr[m])) for m in row_clusters]
+    col_med = [float(np.median(cx_arr[m])) for m in col_clusters]
+
+    runtime_grid = {}
+    for idx, c in enumerate(clean):
+        ri = row_of[idx]
+        ci = col_of[idx]
+        d = (c[0] - col_med[ci]) ** 2 + (c[1] - row_med[ri]) ** 2
+        prev = runtime_grid.get((ri, ci))
+        if prev is None or d < prev[1]:
+            runtime_grid[(ri, ci)] = (c, d)
+
+    runtime_grid = {k: v[0] for k, v in runtime_grid.items()}
+
+    # Grid completion: fill any missing (row, col) slots by intersecting the
+    # row's median cy with the column's median cx, using median cell w/h.
+    # The grid shape is known (expected_rows × expected_cols) so any blank
+    # slot has a well-defined expected position. The slot tuple gets a
+    # synthetic flag at index 6 so debug code can color it differently.
+    median_w = float(np.median([c[2] for c in clean]))
+    median_h = float(np.median([c[3] for c in clean]))
+    for ri in range(_EXPECTED_ROWS):
+        for ci in range(_EXPECTED_COLS):
+            if (ri, ci) in runtime_grid:
+                continue
+            cx = col_med[ci]
+            cy = row_med[ri]
+            # 6-tuple matches detected-cell shape (cx, cy, w, h, area, angle)
+            # plus a 7th element flagging this as estimated.
+            runtime_grid[(ri, ci)] = (
+                int(round(cx)), int(round(cy)),
+                int(round(median_w)), int(round(median_h)),
+                0.0, 0.0, 'est',
+            )
+
+    return runtime_grid, (rows, cols), clean
+
+
+def _sample_lab_at(lab_warped, slot):
+    """slot is (cx, cy, w, h, ...) from runtime grid (or (x,y,w,h) tuple).
+    Returns the median (L, A, B) inside that slot, or None if empty."""
+    if len(slot) >= 4:
+        cx, cy, w, h = slot[0], slot[1], slot[2], slot[3]
+    else:
+        return None
+    x = int(round(cx - w / 2))
+    y = int(round(cy - h / 2))
+    H, W = lab_warped.shape[:2]
+    x = max(0, x); y = max(0, y)
+    x2 = min(W, x + int(w)); y2 = min(H, y + int(h))
+    if x2 <= x or y2 <= y:
+        return None
+    roi = lab_warped[y:y2, x:x2]
+    if roi.size == 0:
+        return None
+    return (float(np.median(roi[:, :, 0])),
+            float(np.median(roi[:, :, 1])),
+            float(np.median(roi[:, :, 2])))
+
+
+def _build_projections(labs_arr: np.ndarray):
+    """Given labs (N, 3) in OpenCV LAB units (L: 0-255, a/b centered at 128),
+    return a dict {name: (proj_values_(N,), descriptor_for_probe_replay)}.
+
+    The descriptor lets us project a single probe sample onto the same axis
+    later (used in measure cells). Format is name-specific:
+      - 'L' / 'A' / 'B': descriptor is the channel index (0/1/2)
+      - 'hue_lch':       descriptor is (median_hue_for_unwrap_reference,
+                                        chroma_threshold_for_drop)
+      - 'pc1_lab':       descriptor is (mean_lab_(3,), axis_lab_(3,))
+      - 'pc1_ab':        descriptor is (mean_ab_(2,), axis_ab_(2,))
+    """
+    L = labs_arr[:, 0]
+    A = labs_arr[:, 1] - 128.0
+    B = labs_arr[:, 2] - 128.0
+    out = {}
+
+    out['L'] = (L.copy(), ('chan', 0))
+    out['A'] = (A.copy(), ('chan_centered', 1))
+    out['B'] = (B.copy(), ('chan_centered', 2))
+
+    chroma = np.sqrt(A * A + B * B)
+    hue = np.degrees(np.arctan2(B, A)) % 360.0
+    # Drop low-saturation swatches from hue selection — hue is unreliable
+    # there. Keep enough to fit (>= 3) or skip the candidate.
+    keep_hue = chroma > 10.0
+    if int(keep_hue.sum()) >= 3:
+        hue_kept = hue[keep_hue]
+        # Unwrap so values cluster around their median (handle 360°/0° wrap)
+        med = float(np.median(hue_kept))
+        hue_unwrapped = ((hue - med + 180.0) % 360.0) - 180.0  # (-180, 180]
+        # Mark dropped slots as nan so the regression skips them
+        hue_proj = np.where(keep_hue, hue_unwrapped, np.nan)
+        out['hue_lch'] = (hue_proj, ('hue_lch', med))
+
+    # PC1 of full LAB
+    if len(labs_arr) >= 3:
+        ab3 = labs_arr.copy().astype(np.float64)
+        ab3[:, 1] -= 128.0
+        ab3[:, 2] -= 128.0
+        mean3 = ab3.mean(axis=0)
+        centered3 = ab3 - mean3
+        try:
+            _, _, Vt = np.linalg.svd(centered3, full_matrices=False)
+            axis3 = Vt[0]
+            proj3 = centered3 @ axis3
+            if float(proj3.std()) > 1e-6:
+                out['pc1_lab'] = (proj3, ('pc1_lab', mean3, axis3))
+        except np.linalg.LinAlgError:
+            pass
+
+    # PC1 of (a, b) only
+    if len(labs_arr) >= 3:
+        ab2 = np.stack([A, B], axis=1)
+        mean2 = ab2.mean(axis=0)
+        centered2 = ab2 - mean2
+        try:
+            _, _, Vt = np.linalg.svd(centered2, full_matrices=False)
+            axis2 = Vt[0]
+            proj2 = centered2 @ axis2
+            if float(proj2.std()) > 1e-6:
+                out['pc1_ab'] = (proj2, ('pc1_ab', mean2, axis2))
+        except np.linalg.LinAlgError:
+            pass
+
+    return out
+
+
+def _project_probe(lab_triple, descriptor, sign):
+    """Given a single probe LAB sample and the descriptor returned by
+    _build_projections, return the scalar projection on the SAME axis.
+    `sign` is +1 or -1 to match the orientation chosen at fit time."""
+    L, a8, b8 = lab_triple
+    A = a8 - 128.0
+    B = b8 - 128.0
+    kind = descriptor[0]
+    if kind == 'chan':
+        idx = descriptor[1]
+        v = (L, a8, b8)[idx]
+    elif kind == 'chan_centered':
+        idx = descriptor[1]
+        v = (L, A, B)[idx]
+    elif kind == 'hue_lch':
+        med = descriptor[1]
+        hue = np.degrees(np.arctan2(B, A)) % 360.0
+        v = ((hue - med + 180.0) % 360.0) - 180.0
+    elif kind == 'pc1_lab':
+        _, mean3, axis3 = descriptor
+        x = np.array([L, A, B], dtype=np.float64) - mean3
+        v = float(x @ axis3)
+    elif kind == 'pc1_ab':
+        _, mean2, axis2 = descriptor
+        x = np.array([A, B], dtype=np.float64) - mean2
+        v = float(x @ axis2)
+    else:
+        return None
+    return float(v) * sign
+
+
+# Per-parameter preferred projection order. The picker tries each in order
+# and uses the FIRST one whose runtime |r| clears MIN_R_PREFERRED. Falls
+# back to "best |r|" search if no preferred candidate qualifies. Reasoning:
+#   pH walks along a hue arc → hue_lch is the natural axis.
+#   H2O2 walks across both lightness and chroma → pc1_lab.
+#   PHMB has small pure-chroma variation → pc1_ab is most stable; B as
+#     backup since the chroma path is roughly along the b axis.
+# Per-parameter override goes in reference.json:
+#   parameters: [{name: 'pH', ..., preferred_projection: ['hue_lch', 'A']}]
+DEFAULT_PROJECTION_PREFS = {
+    'pH':   ('hue_lch', 'A'),
+    'H2O2': ('pc1_lab', 'pc1_ab', 'B'),
+    'PHMB': ('pc1_ab', 'B', 'hue_lch'),
+}
+MIN_R_PREFERRED = 0.9
+
+
+def _measure_warped(warped: np.ndarray, runtime_grid: dict = None) -> dict:
+    """Measure all parameters using runtime-only color regression.
+
+    If `runtime_grid` is supplied (the (row, col) -> detected-cell map from
+    _detect_warped_grid), sample at runtime-detected positions. Otherwise
+    fall back to reference.json's stored (x, y, w, h) — used when grid
+    re-detection has failed.
+    """
     lab_warped = cv2.cvtColor(warped, cv2.COLOR_BGR2LAB)
-    color_cells = [c for c in _REF['cells'] if c['is_color_cell'] and c['value'] is not None]
+    color_cells = [c for c in _REF['cells']
+                   if c['is_color_cell'] and c['value'] is not None]
     measure_cells = [c for c in _REF['cells'] if not c['is_color_cell']]
     param_meta = {p['name']: p for p in _REF['parameters']}
-    name_to_ch = {'L': 0, 'A': 1, 'B': 2}
     out: dict = {}
 
-    for param, meta in param_meta.items():
+    def _slot_for(c):
+        if runtime_grid is not None:
+            return runtime_grid.get((c['row_idx'], c['col_idx']))
+        return (c['x'] + c['w'] / 2.0, c['y'] + c['h'] / 2.0,
+                c['w'], c['h'])
+
+    for param in param_meta:
         p_colors = [c for c in color_cells if c['parameter'] == param]
         p_measure = [c for c in measure_cells if c['parameter'] == param]
         if not p_colors or not p_measure:
@@ -166,98 +451,92 @@ def _measure_warped(warped: np.ndarray) -> dict:
 
         labs, vals = [], []
         for cell in p_colors:
-            x, y, w, h = cell['x'], cell['y'], cell['w'], cell['h']
-            roi = lab_warped[y:y + h, x:x + w]
-            if roi.size == 0:
+            slot = _slot_for(cell)
+            if slot is None:
                 continue
-            labs.append([
-                float(np.median(roi[:, :, 0])),
-                float(np.median(roi[:, :, 1])),
-                float(np.median(roi[:, :, 2])),
-            ])
+            lab = _sample_lab_at(lab_warped, slot)
+            if lab is None:
+                continue
+            labs.append(lab)
             vals.append(cell['value'])
 
         if len(labs) < 3:
             continue
 
-        fixed_ch = meta.get('best_channel')
-        ref_coeffs = meta.get('poly_coeffs')
+        labs_arr = np.array(labs, dtype=np.float64)
+        vals_arr = np.array(vals, dtype=np.float64)
 
-        if fixed_ch in name_to_ch and ref_coeffs is not None:
-            ch_idx = name_to_ch[fixed_ch]
-            ch_name = fixed_ch
-
-            ref_ch, tgt_ch, y_arr = [], [], []
-            for cell, tgt_lab in zip(p_colors, labs):
-                ref_lab = cell.get('lab_median')
-                if ref_lab is None or ref_lab[ch_idx] is None:
-                    continue
-                ref_ch.append(ref_lab[ch_idx])
-                tgt_ch.append(tgt_lab[ch_idx])
-                y_arr.append(cell['value'])
-            ref_ch = np.array(ref_ch, dtype=np.float64)
-            tgt_ch = np.array(tgt_ch, dtype=np.float64)
-            y_arr = np.array(y_arr, dtype=np.float64)
-
-            if len(ref_ch) < 3 or tgt_ch.std() < 1e-6:
+        # Build all candidate projections + their |r| against printed values.
+        # Each candidate carries a descriptor so probe cells can be projected
+        # later via the SAME axis.
+        candidates = _build_projections(labs_arr)
+        evaluated = {}
+        for name, (proj, desc) in candidates.items():
+            mask = ~np.isnan(proj)
+            if int(mask.sum()) < 3:
                 continue
-
-            r = float(np.corrcoef(tgt_ch, y_arr)[0, 1])
-            ref_r = meta.get('best_r') or 0.0
-            # Sign-only quality gate: reject if the runtime correlation has
-            # the OPPOSITE sign of the reference (the relationship is
-            # inverted — likely a misaligned warp). The magnitude check that
-            # used to be here (abs(r) < 0.70) was too strict for real
-            # on-device frames where lighting noise drops r below 0.7 even
-            # when the warp is correct.
-            if ref_r != 0 and np.sign(r) != np.sign(ref_r):
+            x = proj[mask].astype(np.float64)
+            y = vals_arr[mask].astype(np.float64)
+            if x.std() < 1e-6:
                 continue
+            r = float(np.corrcoef(x, y)[0, 1])
+            evaluated[name] = (r, x, y, mask, desc)
 
-            t2r = np.polyfit(tgt_ch, ref_ch, 1)
-            coeffs = np.array(ref_coeffs, dtype=np.float64)
-            pred_ref = np.polyval(t2r, tgt_ch)
-            rmse = float(np.sqrt(np.mean(
-                (np.polyval(coeffs, pred_ref) - y_arr) ** 2)))
-        else:
-            y_f = np.array(vals, dtype=np.float64)
-            best_r, best_ch = 0.0, 1
-            for ch in range(3):
-                x = np.array([lab[ch] for lab in labs], dtype=np.float64)
-                if x.std() < 1e-6:
-                    continue
-                rr = float(np.corrcoef(x, y_f)[0, 1])
-                if abs(rr) > abs(best_r):
-                    best_r, best_ch = rr, ch
-            ch_idx = best_ch
-            ch_name = {0: 'L', 1: 'A', 2: 'B'}[best_ch]
-            r = best_r
-            x_fit = np.array([lbl[ch_idx] for lbl in labs], dtype=np.float64)
-            coeffs = np.polyfit(x_fit, y_f, min(2, len(x_fit) - 1))
-            rmse = float(np.sqrt(np.mean(
-                (np.polyval(coeffs, x_fit) - y_f) ** 2)))
-            t2r = None
-
-        probe_vals = []
-        for cell in p_measure:
-            x, y, w, h = cell['x'], cell['y'], cell['w'], cell['h']
-            roi = lab_warped[y:y + h, x:x + w]
-            if roi.size == 0:
-                continue
-            probe_vals.append(float(np.median(roi[:, :, ch_idx])))
-        if not probe_vals:
+        if not evaluated:
             continue
 
-        probe_ch = float(np.mean(probe_vals))
-        if t2r is not None:
-            probe_ch = float(np.polyval(t2r, probe_ch))
-        value = float(np.polyval(coeffs, probe_ch))
-        ref_vals = sorted(vals)
-        value = float(np.clip(value, ref_vals[0], ref_vals[-1]))
+        # Pick by per-parameter preferred order if any preferred candidate
+        # has |r| >= MIN_R_PREFERRED. Otherwise fall back to global best.
+        prefs = (param_meta[param].get('preferred_projection')
+                 or DEFAULT_PROJECTION_PREFS.get(param, ()))
+        chosen = None
+        for pref in prefs:
+            ev = evaluated.get(pref)
+            if ev is not None and abs(ev[0]) >= MIN_R_PREFERRED:
+                chosen = pref
+                break
+        if chosen is None:
+            chosen = max(evaluated, key=lambda n: abs(evaluated[n][0]))
+
+        best_r, x_fit, y_fit, _msk, best_desc = evaluated[chosen]
+        best_name = chosen
+        best_proj = (x_fit, y_fit, _msk)
+
+        x_fit, y_fit, _ = best_proj
+        sign = 1.0 if best_r >= 0 else -1.0
+        # Flip sign so values increase monotonically with the projection
+        x_fit_signed = x_fit * sign
+        coeffs = np.polyfit(x_fit_signed, y_fit,
+                            min(2, len(x_fit_signed) - 1))
+        rmse = float(np.sqrt(np.mean(
+            (np.polyval(coeffs, x_fit_signed) - y_fit) ** 2)))
+
+        # Sample probes at runtime grid positions, project each onto the
+        # same axis, average projected scalars, evaluate polynomial.
+        probe_projs = []
+        for cell in p_measure:
+            slot = _slot_for(cell)
+            if slot is None:
+                continue
+            lab = _sample_lab_at(lab_warped, slot)
+            if lab is None:
+                continue
+            v = _project_probe(lab, best_desc, sign)
+            if v is None or np.isnan(v):
+                continue
+            probe_projs.append(v)
+        if not probe_projs:
+            continue
+
+        probe_x = float(np.mean(probe_projs))
+        value = float(np.polyval(coeffs, probe_x))
+        ref_vals_sorted = sorted(vals)
+        value = float(np.clip(value, ref_vals_sorted[0], ref_vals_sorted[-1]))
 
         out[param] = {
             'value': round(value, 2),
-            'channel': ch_name,
-            'r': round(r, 3),
+            'channel': best_name,
+            'r': round(best_r, 3),
             'rmse': round(rmse, 3),
         }
 
@@ -308,11 +587,16 @@ def measure_rgba(rgba_bytes: bytes, width: int, height: int) -> dict:
     rgba_bytes: tightly packed RGBA, len = width*height*4.
     Returns: {'found': bool, 'results': {param: {...}}, 'quad': [[x,y]*4] or None}
 
-    Detection uses reference_builder._detect_reference_quad on the full-res
-    BGR — its cell-cluster + Hough-refinement pipeline is robust to clutter
-    (17/17 on real on-device frames vs ~60% for the lowres canny detector
-    used by the live preview). The cost (~40 ms desktop / ~120 ms phone) is
-    fine for a one-shot capture.
+    Two-stage:
+      1. Card detection (cell-cluster + Hough refinement) → quad → warp.
+      2. Re-detect the cell GRID inside the warped image and sample at the
+         runtime-detected positions instead of trusting reference.json's
+         (x, y, w, h). The runtime-only color regression then runs against
+         those samples.
+
+    If the runtime grid shape doesn't match expected (rows × cols), we fall
+    back to reference.json positions — better to attempt with possibly-off
+    samples than refuse to measure.
     """
     arr = np.frombuffer(rgba_bytes, dtype=np.uint8).reshape(height, width, 4)
     bgr = cv2.cvtColor(arr, cv2.COLOR_RGBA2BGR)
@@ -321,10 +605,17 @@ def measure_rgba(rgba_bytes: bytes, width: int, height: int) -> dict:
     if quad is None:
         return {'found': False, 'results': {}, 'quad': None, 'method': 'none'}
     warped = _TRACKER.warp(bgr, quad)
-    results = _measure_warped(warped)
+
+    runtime_grid, (gr_rows, gr_cols), _ = _detect_warped_grid(warped)
+    grid_status = (f'{gr_rows}x{gr_cols}'
+                   f' ({"OK" if runtime_grid is not None else "mismatch"}'
+                   f' / expected {_EXPECTED_ROWS}x{_EXPECTED_COLS})')
+
+    results = _measure_warped(warped, runtime_grid=runtime_grid)
     return {
         'found': True,
         'results': results,
         'quad': quad.tolist(),
         'method': 'cell_cluster',
+        'grid_status': grid_status,
     }

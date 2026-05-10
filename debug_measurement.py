@@ -51,18 +51,31 @@ def _load_reference():
     return ref, tpl, tracker
 
 
-def _draw_cells(warped: np.ndarray, ref: dict) -> np.ndarray:
-    """Overlay every cell ROI on the warped image. Color cells green,
-    measure cells blue, parameter name + cell_idx labelled."""
+def _draw_cells(warped: np.ndarray, ref: dict,
+                runtime_grid: dict = None) -> np.ndarray:
+    """Overlay reference.json positions (red) + runtime-detected positions
+    (yellow). When the new pipeline works, yellow boxes hug the actual
+    swatches even though red boxes don't.
+    """
     vis = warped.copy()
+    # Reference positions in red — stored x/y/w/h as-is
     for c in ref['cells']:
         x, y, w, h = c['x'], c['y'], c['w'], c['h']
-        is_color = c.get('is_color_cell')
-        color = (0, 220, 0) if is_color else (255, 80, 80)
-        cv2.rectangle(vis, (x, y), (x + w, y + h), color, 1)
-        label = f"{c.get('parameter') or '?'}#{c['cell_idx']}"
-        cv2.putText(vis, label, (x + 2, y + 12),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.35, color, 1)
+        cv2.rectangle(vis, (x, y), (x + w, y + h), (60, 60, 200), 1)
+
+    # Runtime-detected positions in yellow (with row/col label).
+    # Estimated (filled-in from row/col medians) drawn in orange.
+    if runtime_grid:
+        for (ri, ci), slot in runtime_grid.items():
+            cx, cy, w, h = slot[0], slot[1], slot[2], slot[3]
+            x = int(round(cx - w / 2))
+            y = int(round(cy - h / 2))
+            estimated = len(slot) > 6 and slot[6] == 'est'
+            color = (0, 140, 255) if estimated else (0, 220, 220)
+            cv2.rectangle(vis, (x, y), (x + int(w), y + int(h)),
+                          color, 2)
+            cv2.putText(vis, f'{ri},{ci}', (x + 2, y + 12),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.35, color, 1)
     return vis
 
 
@@ -144,138 +157,32 @@ def _per_cell_lab_table(warped_bgr: np.ndarray, ref: dict) -> str:
     return '\n'.join(lines)
 
 
-def _measure_with_diag(warped_bgr: np.ndarray, ref: dict):
-    """Re-run _measure_warped's logic with extra diagnostic output.
+def _measure_with_diag(warped_bgr: np.ndarray, ref: dict,
+                       runtime_grid: dict, grid_status: str):
+    """Wrap the new measurement pipeline and emit per-frame diagnostics.
 
     Returns (results_dict, per_param_diag_text, summary_str).
     """
-    lab_warped = cv2.cvtColor(warped_bgr, cv2.COLOR_BGR2LAB)
-    color_cells = [c for c in ref['cells']
-                   if c.get('is_color_cell') and c.get('value') is not None]
-    measure_cells = [c for c in ref['cells'] if not c.get('is_color_cell')]
+    import measurement as M
+    diag_lines = [f"=== grid: {grid_status} ===\n"]
+
+    results = M._measure_warped(warped_bgr, runtime_grid=runtime_grid)
     param_meta = {p['name']: p for p in ref['parameters']}
-    name_to_ch = {'L': 0, 'A': 1, 'B': 2}
-    out: dict = {}
-    diag_lines = []
+
     summary_parts = []
-
-    for param, meta in param_meta.items():
-        diag_lines.append(f"\n=== {param} ===")
-        p_colors = [c for c in color_cells if c.get('parameter') == param]
-        p_measure = [c for c in measure_cells if c.get('parameter') == param]
-        diag_lines.append(f"  color_cells={len(p_colors)} measure_cells={len(p_measure)}")
-        if not p_colors or not p_measure:
-            diag_lines.append("  SKIP: missing color or measure cells")
-            summary_parts.append(f"{param}=cells?")
+    for param in param_meta:
+        diag_lines.append(f"=== {param} ===")
+        if param not in results:
+            diag_lines.append('  no result (cells missing or all-projections rejected)')
+            summary_parts.append(f'{param}=miss')
             continue
+        r = results[param]
+        diag_lines.append(
+            f"  picked projection: {r['channel']}  r={r['r']}  rmse={r['rmse']}")
+        diag_lines.append(f"  value: {r['value']}")
+        summary_parts.append(f"{param}={r['value']}({r['channel']})")
 
-        labs, vals = [], []
-        for cell in p_colors:
-            x, y, w, h = cell['x'], cell['y'], cell['w'], cell['h']
-            roi = lab_warped[y:y + h, x:x + w]
-            if roi.size == 0:
-                continue
-            labs.append([float(np.median(roi[:, :, k])) for k in range(3)])
-            vals.append(cell['value'])
-
-        if len(labs) < 3:
-            diag_lines.append(f"  SKIP: <3 valid swatches ({len(labs)})")
-            summary_parts.append(f"{param}=<3sw")
-            continue
-
-        fixed_ch = meta.get('best_channel')
-        ref_coeffs = meta.get('poly_coeffs')
-        diag_lines.append(f"  ref: best_channel={fixed_ch} ref_r={meta.get('best_r')}")
-
-        if fixed_ch in name_to_ch and ref_coeffs is not None:
-            ch_idx = name_to_ch[fixed_ch]
-            ref_ch, tgt_ch, y_arr = [], [], []
-            for cell, tgt_lab in zip(p_colors, labs):
-                rl = cell.get('lab_median')
-                if rl is None or rl[ch_idx] is None:
-                    continue
-                ref_ch.append(rl[ch_idx])
-                tgt_ch.append(tgt_lab[ch_idx])
-                y_arr.append(cell['value'])
-            ref_ch = np.array(ref_ch, dtype=np.float64)
-            tgt_ch = np.array(tgt_ch, dtype=np.float64)
-            y_arr = np.array(y_arr, dtype=np.float64)
-
-            if len(ref_ch) < 3 or tgt_ch.std() < 1e-6:
-                diag_lines.append(
-                    f"  SKIP: ref_ch={len(ref_ch)} tgt_std={tgt_ch.std():.2f}")
-                summary_parts.append(f"{param}=stdev")
-                continue
-
-            r = float(np.corrcoef(tgt_ch, y_arr)[0, 1])
-            ref_r = meta.get('best_r') or 0.0
-            diag_lines.append(f"  runtime r (tgt_ch vs y) = {r:.3f}  (sign "
-                              f"{'OK' if np.sign(r) == np.sign(ref_r) else 'FLIP'})")
-            if ref_r != 0 and np.sign(r) != np.sign(ref_r):
-                diag_lines.append("  REJECTED: sign mismatch")
-                summary_parts.append(f"{param}=sign")
-                continue
-
-            t2r = np.polyfit(tgt_ch, ref_ch, 1)
-            coeffs = np.array(ref_coeffs, dtype=np.float64)
-            pred_ref = np.polyval(t2r, tgt_ch)
-            rmse = float(np.sqrt(np.mean(
-                (np.polyval(coeffs, pred_ref) - y_arr) ** 2)))
-            diag_lines.append(f"  t2r linear: slope={t2r[0]:.3f} intercept={t2r[1]:.3f}")
-            diag_lines.append(f"  swatch rmse vs printed: {rmse:.2f}")
-            ch_name = fixed_ch
-        else:
-            y_f = np.array(vals, dtype=np.float64)
-            best_r, best_ch = 0.0, 1
-            for ch in range(3):
-                x = np.array([lab[ch] for lab in labs], dtype=np.float64)
-                if x.std() < 1e-6:
-                    continue
-                rr = float(np.corrcoef(x, y_f)[0, 1])
-                if abs(rr) > abs(best_r):
-                    best_r, best_ch = rr, ch
-            ch_idx = best_ch
-            ch_name = {0: 'L', 1: 'A', 2: 'B'}[best_ch]
-            x_fit = np.array([lbl[ch_idx] for lbl in labs], dtype=np.float64)
-            coeffs = np.polyfit(x_fit, y_f, min(2, len(x_fit) - 1))
-            rmse = float(np.sqrt(np.mean(
-                (np.polyval(coeffs, x_fit) - y_f) ** 2)))
-            r = best_r
-            t2r = None
-            diag_lines.append(f"  fallback: chose channel {ch_name} r={best_r:.3f} rmse={rmse:.2f}")
-
-        # measure cells
-        probe_vals = []
-        for cell in p_measure:
-            x, y, w, h = cell['x'], cell['y'], cell['w'], cell['h']
-            roi = lab_warped[y:y + h, x:x + w]
-            if roi.size == 0:
-                continue
-            probe_vals.append(float(np.median(roi[:, :, ch_idx])))
-        if not probe_vals:
-            diag_lines.append("  SKIP: no probe samples")
-            summary_parts.append(f"{param}=noprobe")
-            continue
-        probe_ch = float(np.mean(probe_vals))
-        diag_lines.append(f"  probe channel mean = {probe_ch:.2f}")
-        if t2r is not None:
-            probe_ch_corrected = float(np.polyval(t2r, probe_ch))
-            diag_lines.append(f"  probe -> reference frame = {probe_ch_corrected:.2f}")
-        else:
-            probe_ch_corrected = probe_ch
-        raw = float(np.polyval(np.array(meta.get('poly_coeffs') or coeffs),
-                               probe_ch_corrected)) if t2r is not None else \
-            float(np.polyval(coeffs, probe_ch_corrected))
-        ref_vals_sorted = sorted(vals)
-        clipped = float(np.clip(raw, ref_vals_sorted[0], ref_vals_sorted[-1]))
-        clip_flag = '' if abs(clipped - raw) < 1e-3 else ' (clipped)'
-        diag_lines.append(f"  raw={raw:.2f}  clipped={clipped:.2f}{clip_flag}  "
-                          f"range=[{ref_vals_sorted[0]}, {ref_vals_sorted[-1]}]")
-        out[param] = {'value': round(clipped, 2), 'channel': ch_name,
-                      'r': round(r, 3), 'rmse': round(rmse, 3)}
-        summary_parts.append(f"{param}={clipped:.1f}")
-
-    return out, '\n'.join(diag_lines), ' | '.join(summary_parts)
+    return results, '\n'.join(diag_lines), ' | '.join(summary_parts)
 
 
 def process(path: str, ref: dict, tpl: np.ndarray,
@@ -299,22 +206,28 @@ def process(path: str, ref: dict, tpl: np.ndarray,
 
     warped = tracker.warp(bgr, quad)
     cv2.imwrite(os.path.join(out_dir, '30_warped.jpg'), warped)
+
+    # Re-detect grid in the warped image (same logic as measurement.measure_rgba)
+    import measurement as M
+    runtime_grid, (gr_rows, gr_cols), _detected_cells = M._detect_warped_grid(warped)
+    grid_status = (f'{gr_rows}x{gr_cols}'
+                   f' ({"OK" if runtime_grid is not None else "mismatch"}'
+                   f' / expected {M._EXPECTED_ROWS}x{M._EXPECTED_COLS})')
+
     cv2.imwrite(os.path.join(out_dir, '30_warped_with_cells.jpg'),
-                _draw_cells(warped, ref))
+                _draw_cells(warped, ref, runtime_grid=runtime_grid))
     cv2.imwrite(os.path.join(out_dir, '31_cell_swatches.jpg'),
                 _swatch_strip(warped, tpl, ref))
-    with open(os.path.join(out_dir, '32_lab_per_cell.txt'), 'w',
-              encoding='utf-8') as f:
-        f.write(_per_cell_lab_table(warped, ref))
 
-    results, diag, summary = _measure_with_diag(warped, ref)
+    results, diag, summary = _measure_with_diag(
+        warped, ref, runtime_grid=runtime_grid, grid_status=grid_status)
     with open(os.path.join(out_dir, '33_per_param.txt'), 'w',
               encoding='utf-8') as f:
         f.write(diag)
 
     n = len(results)
     flag = 'OK' if n == 3 else (f'{n}/3' if n > 0 else 'NONE')
-    return f'{base}: [{flag}] {summary}'
+    return f'{base}: [{flag}] grid={gr_rows}x{gr_cols} | {summary}'
 
 
 def main():

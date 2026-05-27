@@ -95,6 +95,13 @@
                 android:text="Debug" />
 
             <Button
+                android:id="@+id/refTableButton"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginEnd="16dp"
+                android:text="Table" />
+
+            <Button
                 android:id="@+id/refRetakeButton"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"

@@ -4,8 +4,8 @@
   picked projection: hue_lch  r=-0.994  rmse=0.047
   value: 6.8
 === H2O2 ===
-  picked projection: pc1_lab  r=-0.928  rmse=5.325
-  value: 10.13
+  picked projection: pc1_lab  r=-0.927  rmse=5.3
+  value: 10.18
 === PHMB ===
   picked projection: pc1_ab  r=-0.958  rmse=3.521
-  value: 29.5
+  value: 29.44

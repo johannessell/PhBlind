@@ -8,7 +8,28 @@
       "Read(//c/Users/johan/AppData/Local/Android/Sdk/platform-tools/**)",
       "Bash(powershell -Command 'Get-ChildItem -Path '\\\\''C:\\\\'\\\\'','\\\\''C:\\\\Users\\\\johan'\\\\'' -Recurse -Filter '\\\\''adb.exe'\\\\'' -ErrorAction SilentlyContinue -Depth 6 2>$null | Select-Object -First 5 -ExpandProperty FullName')",
       "Bash(python debug_measurement.py)",
-      "Bash(python debug_hough_compare.py)"
+      "Bash(python debug_hough_compare.py)",
+      "Bash(python benchmark_live_tracker.py)",
+      "Bash(python benchmark_feature_detector.py)",
+      "Bash(python debug_ref_cells.py)",
+      "Bash(python debug_build_ref.py)",
+      "Bash(git checkout *)",
+      "Bash(env)",
+      "Read(//c/Users/johan/**)",
+      "Bash(wait %1)",
+      "Bash(ls \"C:/Program Files\" 2>&1 | grep -i android; echo ---; ls \"C:/Users/johan/AppData/Roaming\" 2>&1 | grep -i android; echo ---; ls \"C:/Users/johan\" 2>&1 | head -30)",
+      "Read(//c/Program Files/**)",
+      "Bash(\"D:/Android/AndroidSDK/platform-tools/adb.exe\" pull *)",
+      "Bash(python debug_hough_grid.py)",
+      "Bash(git ls-tree *)",
+      "Bash(grep -E \"\\\\.\\(py|md\\)$\")",
+      "Bash(python debug_old_logic.py)",
+      "Bash(python debug_reference_pipeline.py)",
+      "Bash(python debug_compare_minfloor.py)",
+      "Bash(python debug_one_frame.py)",
+      "Bash(PYTHONIOENCODING=utf-8 python -c ' *)",
+      "Bash(python _check_classify.py)",
+      "Bash(./gradlew installDebug)"
     ]
   }
 }

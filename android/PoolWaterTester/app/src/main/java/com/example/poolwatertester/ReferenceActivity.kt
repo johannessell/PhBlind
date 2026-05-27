@@ -75,6 +75,7 @@ class ReferenceActivity : AppCompatActivity() {
         binding.refRetakeButton.setOnClickListener { showCaptureState() }
         binding.refSaveButton.setOnClickListener { save() }
         binding.refDebugButton.setOnClickListener { cycleDebugImage() }
+        binding.refTableButton.setOnClickListener { showRefTable() }
 
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA)
             == PackageManager.PERMISSION_GRANTED
@@ -254,6 +255,49 @@ class ReferenceActivity : AppCompatActivity() {
         }
     }
 
+    private fun showRefTable() {
+        val ref = refDict ?: return
+        // Apply current editor edits (values + parameter names + the
+        // long-press column-type overrides) before formatting so the
+        // table reflects what the user is currently looking at, not the
+        // raw classifier output from build_reference.
+        val editedValues = binding.cellEditor.cellValues
+        val editedNames = binding.cellEditor.paramNames
+        val colTypes = binding.cellEditor.colIsColor.mapValues {
+            if (it.value) "color" else "measure"
+        }
+        try {
+            refBuilder.callAttr("apply_edits_and_finalize",
+                                ref, editedValues, editedNames, colTypes)
+        } catch (e: Exception) {
+            Log.w(TAG, "apply_edits_and_finalize failed pre-table", e)
+        }
+        val table = try {
+            refBuilder.callAttr("format_ref_table", ref).toString()
+        } catch (e: Exception) {
+            Log.e(TAG, "format_ref_table failed", e)
+            "format_ref_table failed: ${e.message}"
+        }
+        val tv = android.widget.TextView(this).apply {
+            text = table
+            typeface = android.graphics.Typeface.MONOSPACE
+            textSize = 11f
+            setPadding(24, 24, 24, 24)
+            setTextIsSelectable(true)
+        }
+        val hsv = android.widget.HorizontalScrollView(this).apply {
+            addView(tv)
+        }
+        val sv = android.widget.ScrollView(this).apply {
+            addView(hsv)
+        }
+        androidx.appcompat.app.AlertDialog.Builder(this)
+            .setTitle("reference.json")
+            .setView(sv)
+            .setPositiveButton("OK", null)
+            .show()
+    }
+
     private fun showDebugOnly() {
         // Detection failed — drop into edit-state UI showing only debug images
         binding.captureState.visibility = View.GONE
@@ -292,6 +336,7 @@ class ReferenceActivity : AppCompatActivity() {
             val cm = cPy.asMap()
             val cellIdx = cm[PyObject.fromJava("cell_idx")]!!.toInt()
             val rowIdx = cm[PyObject.fromJava("row_idx")]!!.toInt()
+            val colIdx = cm[PyObject.fromJava("col_idx")]!!.toInt()
             val groupIdxPy = cm[PyObject.fromJava("group_idx")]
             val groupIdx = if (groupIdxPy == null || groupIdxPy.toString() == "None") null
                            else groupIdxPy.toInt()
@@ -300,7 +345,8 @@ class ReferenceActivity : AppCompatActivity() {
             val y = cm[PyObject.fromJava("y")]!!.toInt()
             val w = cm[PyObject.fromJava("w")]!!.toInt()
             val h = cm[PyObject.fromJava("h")]!!.toInt()
-            cells += CellOverlayEditor.Cell(cellIdx, rowIdx, groupIdx, isColor, x, y, w, h)
+            cells += CellOverlayEditor.Cell(cellIdx, rowIdx, colIdx, groupIdx,
+                                            isColor, x, y, w, h)
             val vPy = cm[PyObject.fromJava("value")]
             initialValues[cellIdx] = if (vPy == null || vPy.toString() == "None") null
                                      else vPy.toString()
@@ -348,7 +394,12 @@ class ReferenceActivity : AppCompatActivity() {
                 withContext(Dispatchers.Default) {
                     val editedValues = binding.cellEditor.cellValues
                     val editedNames = binding.cellEditor.paramNames
-                    refBuilder.callAttr("apply_edits_and_finalize", ref, editedValues, editedNames)
+                    val colTypes = binding.cellEditor.colIsColor.mapValues {
+                        if (it.value) "color" else "measure"
+                    }
+                    refBuilder.callAttr("apply_edits_and_finalize",
+                                        ref, editedValues, editedNames,
+                                        colTypes)
 
                     val rgba = bitmapToRgbaBytes(warped)
                     refBuilder.callAttr(

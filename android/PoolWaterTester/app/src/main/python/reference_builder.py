@@ -26,7 +26,11 @@ import numpy as np
 from tracker import order_quad_corners
 
 CANONICAL_WIDTH = 720
-COLOR_SAT_MAX = 70.0
+COLOR_SAT_MAX = 70.0          # legacy, unused — kept for reference
+# Inter-cell std(A) + std(B) above this -> column is a color gradient.
+# Measure cols sit at ~1-3 (just text noise on white). Color cols spread
+# 8+ even for faded swatches; vivid ones reach 20+.
+COLOR_AB_SPREAD_MIN = 10.0
 GROUP_MAX_DISTANCE_FRAC = 0.22  # relative to canonical_width
 
 
@@ -98,10 +102,19 @@ def _compute_edges(gray: np.ndarray) -> np.ndarray:
     return edges
 
 
-def _detect_cell_rects(edges: np.ndarray) -> List[Tuple[int, int, int, int, float, float]]:
+def _detect_cell_rects(edges: np.ndarray,
+                       min_cell_floor: float = 0.0
+                       ) -> List[Tuple[int, int, int, int, float, float]]:
     """Finde alle quadratischen/rechteckigen kleinen Konturen.
 
     Rueckgabe: Liste von (cx, cy, w, h, area, angle_deg).
+
+    `min_cell_floor`: absolute lower bound on contour area (px^2). Use
+    >= 2000 when called on full-res photos to filter out wood-grain
+    artefacts that look like tiny cells. Default 0 preserves the
+    relative-only threshold needed for the canonical warped image where
+    real cells span ~5000-10000 px^2 but smaller contours still help
+    locate column boundaries.
     """
     edges_closed = cv2.morphologyEx(edges, cv2.MORPH_CLOSE,
                                     np.ones((5, 5), np.uint8), iterations=1)
@@ -111,7 +124,7 @@ def _detect_cell_rects(edges: np.ndarray) -> List[Tuple[int, int, int, int, floa
                                    cv2.CHAIN_APPROX_SIMPLE)
     h, w = edges.shape
     frame_area = float(h * w)
-    min_cell = frame_area * 0.0001
+    min_cell = max(frame_area * 0.0001, float(min_cell_floor))
     max_cell = frame_area * 0.02
 
     cells: List[Tuple[int, int, int, int, float, float]] = []
@@ -515,7 +528,10 @@ def _detect_reference_quad(gray: np.ndarray, bgr: Optional[np.ndarray] = None) -
     aus Kompatibilitaetsgruenden erhalten.
     """
     edges = _compute_edges(gray)
-    cells = _detect_cell_rects(edges)
+    # 2000 px^2 floor rejects wood-grain artefacts; the canonical warped
+    # path keeps the relative threshold so smaller contours can still
+    # help split column positions.
+    cells = _detect_cell_rects(edges, min_cell_floor=2000.0)
 
     if _DEBUG_DIR:
         vis = cv2.cvtColor(gray, cv2.COLOR_GRAY2BGR)
@@ -566,7 +582,8 @@ def _detect_reference_quad(gray: np.ndarray, bgr: Optional[np.ndarray] = None) -
     pts = np.array([(c[0], c[1]) for c in cluster], dtype=np.float32)
     sizes = np.array([max(c[2], c[3]) for c in cluster], dtype=np.float32)
     cell_angles = np.array([c[5] for c in cluster], dtype=np.float32)
-    half_cell = float(np.median(sizes)) * 0.5
+    median_cell = float(np.median(sizes))
+    half_cell = median_cell * 0.5
 
     angle_deg = float(np.median(cell_angles))
 
@@ -696,10 +713,13 @@ def _build_grid(rects, canonical_width):
     rows = _group_by_axis(rects, axis=1, tol=row_tol)
     cols = _group_by_axis(rects, axis=0, tol=col_tol)
 
-    row_positions = [min(r[1] for r in row) for row in rows]
-    row_heights = [max(r[3] for r in row) for row in rows]
-    col_positions = [min(r[0] for r in col) for col in cols]
-    col_widths = [max(r[2] for r in col) for col in cols]
+    # Use the MEDIAN of detected widths/heights so a single oversized
+    # Canny contour in one cell doesn't inflate the rect for every
+    # other cell that inherits this column's width / this row's height.
+    row_positions = [int(np.median([r[1] for r in row])) for row in rows]
+    row_heights = [int(np.median([r[3] for r in row])) for row in rows]
+    col_positions = [int(np.median([r[0] for r in col])) for col in cols]
+    col_widths = [int(np.median([r[2] for r in col])) for col in cols]
 
     row_order = sorted(range(len(rows)), key=lambda i: row_positions[i])
     col_order = sorted(range(len(cols)), key=lambda i: col_positions[i])
@@ -729,19 +749,57 @@ def _build_grid(rects, canonical_width):
 # Spalten-Klassifikation + Gruppierung
 # ----------------------------------------------------------
 
-def _classify_columns(warped_bgr, cols):
-    hsv = cv2.cvtColor(warped_bgr, cv2.COLOR_BGR2HSV)
+def _classify_columns(warped_bgr, grid):
+    """Distinguish 'color' columns (calibration swatches that change from
+    row to row) from 'measure' columns (identical white background with
+    only text variation).
+
+    Operates on the matrix-filled `grid` (from _build_grid) so columns
+    with sparse Canny detection still get sampled at every row position
+    via the col-median x and row-median y derived from neighbouring
+    cells. This is critical for faded color columns where only 1-2
+    rects survive contour detection.
+
+    Signal: the inter-cell spread of LAB (A, B) within a column.
+    Color cols are gradients (pink -> light pink -> faint), so cell-to-
+    cell A/B medians spread out widely. Measure cols are the same white
+    background in every row; text noise contributes only a small
+    residual to std(A) and std(B). Lighting cancels out because every
+    cell in the column sees the same illumination at the same instant.
+    """
+    lab = cv2.cvtColor(warped_bgr, cv2.COLOR_BGR2LAB)
+    cells_by_col: dict = {}
+    for cell in grid:
+        cells_by_col.setdefault(cell['col_idx'], []).append(cell)
     col_types = {}
     col_stats = {}
-    for i, col_rects in enumerate(cols):
-        cell_sat_medians = []
-        for (x, y, w, h) in col_rects:
-            roi = hsv[y:y + h, x:x + w]
-            if roi.size > 0:
-                cell_sat_medians.append(float(np.median(roi[:, :, 1])))
-        max_sat = max(cell_sat_medians) if cell_sat_medians else 0.0
-        col_stats[i] = {'cell_sat_max': max_sat}
-        col_types[i] = 'color' if max_sat >= COLOR_SAT_MAX else 'measure'
+    for ci, cells in cells_by_col.items():
+        a_medians = []
+        b_medians = []
+        for c in cells:
+            x, y, w, h = c['x'], c['y'], c['w'], c['h']
+            roi = lab[y:y + h, x:x + w]
+            if roi.size == 0:
+                continue
+            a_medians.append(float(np.median(roi[:, :, 1])))
+            b_medians.append(float(np.median(roi[:, :, 2])))
+        if len(a_medians) >= 4:
+            # IQR (P75 - P25) discards the top + bottom 25% of cells, so
+            # several shadow / glare / occluded cells in a label column
+            # don't pull the spread up. A real colour gradient still has
+            # a substantial spread in the middle quartiles.
+            iqr_a = float(np.percentile(a_medians, 75)
+                          - np.percentile(a_medians, 25))
+            iqr_b = float(np.percentile(b_medians, 75)
+                          - np.percentile(b_medians, 25))
+            spread = iqr_a + iqr_b
+        elif len(a_medians) >= 2:
+            spread = float(max(a_medians) - min(a_medians)
+                           + max(b_medians) - min(b_medians))
+        else:
+            spread = 0.0
+        col_stats[ci] = {'ab_spread': spread}
+        col_types[ci] = 'color' if spread >= COLOR_AB_SPREAD_MIN else 'measure'
     return col_types, col_stats
 
 
@@ -839,7 +897,7 @@ def build_reference(bgr: np.ndarray) -> dict:
 
     (grid, sorted_cols, col_positions, col_widths,
      row_positions, row_heights) = _build_grid(rects, cw)
-    col_types, col_stats = _classify_columns(warped_bgr, sorted_cols)
+    col_types, col_stats = _classify_columns(warped_bgr, grid)
     col_groups = _group_columns_spatially(col_types, col_positions, cw)
 
     hsv = cv2.cvtColor(warped_bgr, cv2.COLOR_BGR2HSV)
@@ -1161,10 +1219,14 @@ def compute_best_channels(warped_bgr: np.ndarray,
 
 def apply_edits_and_finalize(ref: dict,
                              edited_values,
-                             edited_names) -> dict:
+                             edited_names,
+                             col_type_overrides=None) -> dict:
     """
-    edited_values: map cell_idx (int or str) -> str (user-typed, possibly '')
-    edited_names:  map group_idx (int or str) -> str (user-typed parameter name)
+    edited_values:       map cell_idx (int or str) -> str (user-typed)
+    edited_names:        map group_idx (int or str) -> str (parameter name)
+    col_type_overrides:  optional map col_idx (int or str) -> 'color' | 'measure'.
+                         Per-column override of the auto-classifier output
+                         from the editor's long-press toggle.
 
     Overwrites ref['cells'][*]['value'] and ref['parameters'][*]['name'],
     then propagates names onto cells and spreads measure-cell values onto
@@ -1178,6 +1240,21 @@ def apply_edits_and_finalize(ref: dict,
 
     edited_values = _to_py(edited_values) or {}
     edited_names = _to_py(edited_names) or {}
+    overrides_py = _to_py(col_type_overrides) or {}
+
+    # Apply column-type overrides first so the value-update loop below
+    # sees the updated is_color_cell on each cell.
+    col_overrides = {}
+    for k, v in overrides_py.items():
+        ki = _to_int(k)
+        if ki is None:
+            continue
+        col_overrides[ki] = (str(v).lower() == 'color')
+    if col_overrides:
+        for c in ref.get('cells', []):
+            ci = c.get('col_idx')
+            if ci in col_overrides:
+                c['is_color_cell'] = col_overrides[ci]
 
     values_by_idx = {}
     for k, v in edited_values.items():
@@ -1227,6 +1304,60 @@ def compute_best_channels_rgba(ref: dict,
     compute_best_channels(warped_bgr, ref.get('cells', []),
                           ref.get('parameters', []))
     return ref
+
+
+def format_ref_table(ref: dict) -> str:
+    """Pretty-printed table representation of a reference dict for
+    on-device inspection. Returns a single string with cells laid out
+    row x col, showing type (C=color / M=measure) and value, plus a
+    parameter summary at the top."""
+    cells = ref.get('cells', [])
+    params = ref.get('parameters', [])
+    if not cells:
+        return '(empty reference)'
+
+    rows = max((c.get('row_idx', 0) for c in cells), default=-1) + 1
+    cols = max((c.get('col_idx', 0) for c in cells), default=-1) + 1
+
+    lines = []
+    lines.append(f"grid {rows}x{cols}  cells={len(cells)}  "
+                 f"parameters={len(params)}")
+    lines.append('')
+
+    for p in params:
+        gi = p.get('group_idx')
+        nm = p.get('name')
+        cols_in = p.get('cols', [])
+        mc = p.get('measure_col')
+        bc = p.get('best_channel')
+        rr = p.get('best_r')
+        lines.append(f"param[{gi}] name={nm!r} cols={cols_in} "
+                     f"measure_col={mc} best_channel={bc} r={rr}")
+    lines.append('')
+
+    # Cell index by (row, col)
+    by_rc = {(c.get('row_idx'), c.get('col_idx')): c for c in cells}
+    col_w = 11  # width per cell column
+
+    header = '  row | ' + ''.join(f'col{ci:<2d}'.ljust(col_w)
+                                  for ci in range(cols))
+    lines.append(header)
+    lines.append('  ' + '-' * (len(header) - 2))
+    for ri in range(rows):
+        cell_strs = []
+        for ci in range(cols):
+            c = by_rc.get((ri, ci))
+            if c is None:
+                cell_strs.append('-'.ljust(col_w))
+                continue
+            t = 'C' if c.get('is_color_cell') else 'M'
+            v = c.get('value')
+            v_s = '_' if v is None else (
+                f'{v:g}' if isinstance(v, (int, float)) else str(v))
+            cell_strs.append(f'{t}:{v_s}'.ljust(col_w))
+        lines.append(f'  {ri:3d} | ' + ''.join(cell_strs))
+
+    return '\n'.join(lines)
 
 
 def ref_to_json_str(ref: dict) -> str:

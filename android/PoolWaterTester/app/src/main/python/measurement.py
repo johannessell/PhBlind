@@ -28,18 +28,123 @@ _STABILITY = QuadStabilityChecker(required_frames=5, max_drift=20.0)
 _LIVE_TRACK_W = 480
 
 
+_MIN_CELLS_PER_CLUSTER = 6
+_CELL_MIN_SHORT_PX = 6      # at 480 wide; below this is noise
+_CELL_MAX_SHORT_PX = 50     # above this isn't a single cell
+_CELL_MAX_AR = 4.5
+_CELL_MIN_RECTANGULARITY = 0.55
+
+
+def _detect_cells_otsu(gray: np.ndarray):
+    """Otsu-threshold the gray, erode 2 px so adjacent cells stay disjoint,
+    then take each bright connected component as a cell candidate.
+
+    Returns list of (cx, cy, long_side, short_side, area, angle_deg) —
+    same tuple format as reference_builder._detect_cell_rects, so the
+    downstream cluster/score logic is unchanged.
+
+    Otsu gives clean, filled cell shapes (much better than Canny edges,
+    which only outline cells and need closure to be useful).
+    """
+    blurred = cv2.GaussianBlur(gray, (3, 3), 0)
+    _t, mask = cv2.threshold(blurred, 0, 255,
+                             cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+    mask = cv2.erode(mask, np.ones((2, 2), np.uint8), iterations=1)
+
+    num, labels, stats, _cent = cv2.connectedComponentsWithStats(
+        mask, connectivity=8)
+    cells = []
+    min_area = _CELL_MIN_SHORT_PX * _CELL_MIN_SHORT_PX
+    max_area = _CELL_MAX_SHORT_PX * _CELL_MAX_SHORT_PX * 1.5
+    for k in range(1, num):
+        area = int(stats[k, cv2.CC_STAT_AREA])
+        if area < min_area or area > max_area:
+            continue
+        bx = int(stats[k, cv2.CC_STAT_LEFT])
+        by = int(stats[k, cv2.CC_STAT_TOP])
+        bw = int(stats[k, cv2.CC_STAT_WIDTH])
+        bh = int(stats[k, cv2.CC_STAT_HEIGHT])
+        # Cheap pre-filter on the stats bbox before paying for minAreaRect.
+        if (min(bw, bh) < _CELL_MIN_SHORT_PX
+                or max(bw, bh) > _CELL_MAX_SHORT_PX * 1.5):
+            continue
+        # Crop to component bbox so np.where is bounded.
+        sub = labels[by:by + bh, bx:bx + bw] == k
+        ys, xs = np.where(sub)
+        pts = np.column_stack((xs + bx, ys + by)).astype(np.float32)
+        rect = cv2.minAreaRect(pts)
+        rw, rh = rect[1]
+        long_s = max(rw, rh)
+        short_s = min(rw, rh)
+        if (short_s < _CELL_MIN_SHORT_PX or short_s > _CELL_MAX_SHORT_PX
+                or long_s > _CELL_MAX_SHORT_PX * 1.5):
+            continue
+        if long_s / max(short_s, 1e-3) > _CELL_MAX_AR:
+            continue
+        if area / max(rw * rh, 1) < _CELL_MIN_RECTANGULARITY:
+            continue
+        ang = rect[2] + (90.0 if rw < rh else 0.0)
+        while ang > 45.0:
+            ang -= 90.0
+        while ang < -45.0:
+            ang += 90.0
+        cx, cy = rect[0]
+        cells.append((int(cx), int(cy), int(long_s), int(short_s),
+                      float(area), float(ang)))
+    return cells
+
+
+def _cluster_cells_by_proximity(cells, radius_factor: float = 2.5):
+    """Single-link cluster cells by center proximity. Returns list of lists
+    of cell indices. Union-find over an n*n distance test; n is small."""
+    n = len(cells)
+    if n == 0:
+        return []
+    pts = np.array([(c[0], c[1]) for c in cells], dtype=np.float32)
+    sizes = np.array([max(c[2], c[3]) for c in cells], dtype=np.float32)
+    radius = max(float(np.median(sizes)) * radius_factor, 30.0)
+
+    parent = list(range(n))
+
+    def find(i):
+        while parent[i] != i:
+            parent[i] = parent[parent[i]]
+            i = parent[i]
+        return i
+
+    def union(i, j):
+        ri, rj = find(i), find(j)
+        if ri != rj:
+            parent[ri] = rj
+
+    for i in range(n):
+        d = np.linalg.norm(pts - pts[i], axis=1)
+        for j in np.where(d < radius)[0]:
+            if j > i:
+                union(i, int(j))
+
+    groups: dict = {}
+    for i in range(n):
+        groups.setdefault(find(i), []).append(i)
+    return list(groups.values())
+
+
 def _find_quad_lowres(gray: np.ndarray):
-    """Live-preview detector: downscale + Canny + small close + largest
-    4-vertex polygon. Approximate but fast (~3 ms desktop).
+    """Live-preview detector.
 
-    Used by find_quad_y per analyzer frame. Only needs to give the user a
-    rough "card detected" overlay; the precise warp at capture time uses
-    reference_builder._detect_reference_quad on the full-res frame.
+    Otsu-threshold the gray frame, take each bright connected component as
+    a cell candidate, cluster the candidates by spatial proximity, and
+    return the rotated bbox of the largest near-centre cluster, expanded
+    by ~half a cell on each side.
 
-    Per-frame hit rate on real cluttered scenes is ~60% — that's fine
-    because the stability buffer (5-frame agreement) only triggers when
-    detection is consistent, and a few missed frames just delay the
-    trigger by 100-200 ms.
+    The card outline itself is unreliable (transparent plastic on table)
+    so we anchor on the cells. Otsu cleanly separates the light cell
+    interiors from the dark grid borders even when clutter (glasses,
+    magazines, monitors) sits behind the card.
+
+    Returns None if no cluster reaches _MIN_CELLS_PER_CLUSTER cells.
+
+    Used by find_quad_y per analyzer frame; ~5 ms on desktop at 480 wide.
     """
     h, w = gray.shape[:2]
     if w > _LIVE_TRACK_W * 1.25:
@@ -50,46 +155,50 @@ def _find_quad_lowres(gray: np.ndarray):
         scale = 1.0
         small = gray
 
-    tpl_ar = _TRACKER.aspect_ratio if _TRACKER is not None else 1.4
-    ar_lo = tpl_ar * (1.0 - 0.35)
-    ar_hi = tpl_ar * (1.0 + 0.35)
-
-    blurred = cv2.GaussianBlur(small, (5, 5), 0)
-    edges = cv2.Canny(blurred, 30, 90)
-    edges = cv2.morphologyEx(edges, cv2.MORPH_CLOSE,
-                             np.ones((3, 3), np.uint8), iterations=1)
-    contours, _ = cv2.findContours(edges, cv2.RETR_EXTERNAL,
-                                   cv2.CHAIN_APPROX_SIMPLE)
-    sh, sw = small.shape
-    frame_area = float(sh * sw)
-
-    best = None
-    best_area = 0.0
-    for cnt in contours:
-        area = cv2.contourArea(cnt)
-        if area < frame_area * 0.05 or area > frame_area * 0.99:
-            continue
-        hull = cv2.convexHull(cnt)
-        peri = cv2.arcLength(hull, True)
-        if peri < 1:
-            continue
-        for eps_frac in (0.02, 0.03, 0.04, 0.06, 0.08):
-            approx = cv2.approxPolyDP(hull, eps_frac * peri, True)
-            if len(approx) == 4 and cv2.isContourConvex(approx):
-                rect = cv2.minAreaRect(approx)
-                rw, rh = rect[1]
-                if min(rw, rh) < 1:
-                    break
-                qar = max(rw, rh) / max(min(rw, rh), 1e-6)
-                if not (ar_lo <= qar <= ar_hi):
-                    break
-                if area > best_area:
-                    best_area = area
-                    best = approx
-                break
-    if best is None:
+    cells = _detect_cells_otsu(small)
+    if len(cells) < _MIN_CELLS_PER_CLUSTER:
         return None
-    quad = order_quad_corners(best.reshape(4, 2).astype(np.float32))
+
+    clusters = _cluster_cells_by_proximity(cells)
+
+    sh, sw = small.shape
+    img_center = np.array([sw * 0.5, sh * 0.5], dtype=np.float32)
+    img_diag = float(np.hypot(sw, sh))
+
+    best_rect = None
+    best_score = -1e9
+    best_cell_short = 0.0
+    for indices in clusters:
+        if len(indices) < _MIN_CELLS_PER_CLUSTER:
+            continue
+        cluster_cells = [cells[i] for i in indices]
+        pts = np.array([(c[0], c[1]) for c in cluster_cells],
+                       dtype=np.float32)
+        rect = cv2.minAreaRect(pts)
+        if min(rect[1]) < 1:
+            continue
+        cdist = float(np.linalg.norm(
+            np.array(rect[0], dtype=np.float32) - img_center)) / img_diag
+        score = len(indices) - 5.0 * cdist
+        if score > best_score:
+            best_score = score
+            best_rect = rect
+            best_cell_short = float(
+                np.median([min(c[2], c[3]) for c in cluster_cells]))
+
+    if best_rect is None:
+        return None
+
+    # Margin chosen to land the overlay on the card's outer border, not
+    # just the inner grid. The card extends roughly one cell short-side
+    # past the cell grid on each side.
+    margin = max(best_cell_short * 1.0, 6.0)
+    (cx, cy), (rw, rh), ang = best_rect
+    rw += 2.0 * margin
+    rh += 2.0 * margin
+    box = cv2.boxPoints(((cx, cy), (rw, rh), ang)).astype(np.float32)
+
+    quad = order_quad_corners(box)
     if scale != 1.0:
         quad = (quad / scale).astype(np.float32)
     return quad
@@ -261,23 +370,33 @@ def _detect_warped_grid(warped_bgr: np.ndarray):
     runtime_grid = {k: v[0] for k, v in runtime_grid.items()}
 
     # Grid completion: fill any missing (row, col) slots by intersecting the
-    # row's median cy with the column's median cx, using median cell w/h.
-    # The grid shape is known (expected_rows × expected_cols) so any blank
-    # slot has a well-defined expected position. The slot tuple gets a
-    # synthetic flag at index 6 so debug code can color it differently.
-    median_w = float(np.median([c[2] for c in clean]))
-    median_h = float(np.median([c[3] for c in clean]))
+    # row's median cy with the column's median cx. Use the column's own
+    # median width (labels are wider than color swatches, so a global
+    # median picks the wrong size) and the row's own median height,
+    # falling back to the global median when a row/col has no detected
+    # cells. The slot tuple gets a synthetic flag at index 6 so debug
+    # code can color it differently.
+    global_w = float(np.median([c[2] for c in clean]))
+    global_h = float(np.median([c[3] for c in clean]))
+    col_w = {
+        ci: (float(np.median([clean[m][2] for m in members]))
+             if members else global_w)
+        for ci, members in enumerate(col_clusters)
+    }
+    row_h = {
+        ri: (float(np.median([clean[m][3] for m in members]))
+             if members else global_h)
+        for ri, members in enumerate(row_clusters)
+    }
     for ri in range(_EXPECTED_ROWS):
         for ci in range(_EXPECTED_COLS):
             if (ri, ci) in runtime_grid:
                 continue
             cx = col_med[ci]
             cy = row_med[ri]
-            # 6-tuple matches detected-cell shape (cx, cy, w, h, area, angle)
-            # plus a 7th element flagging this as estimated.
             runtime_grid[(ri, ci)] = (
                 int(round(cx)), int(round(cy)),
-                int(round(median_w)), int(round(median_h)),
+                int(round(col_w[ci])), int(round(row_h[ri])),
                 0.0, 0.0, 'est',
             )
 

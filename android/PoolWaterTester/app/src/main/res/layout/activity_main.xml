@@ -24,6 +24,19 @@
         app:layout_constraintStart_toStartOf="@id/preview"
         app:layout_constraintEnd_toEndOf="@id/preview" />
 
+    <ImageView
+        android:id="@+id/resultImage"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:scaleType="fitCenter"
+        android:background="#000000"
+        android:visibility="gone"
+        android:contentDescription="measurement result with grid overlay"
+        app:layout_constraintTop_toTopOf="@id/preview"
+        app:layout_constraintBottom_toBottomOf="@id/preview"
+        app:layout_constraintStart_toStartOf="@id/preview"
+        app:layout_constraintEnd_toEndOf="@id/preview" />
+
     <TextView
         android:id="@+id/status"
         android:layout_width="wrap_content"

@@ -33,6 +33,14 @@ _CELL_MIN_SHORT_PX = 6      # at 480 wide; below this is noise
 _CELL_MAX_SHORT_PX = 50     # above this isn't a single cell
 _CELL_MAX_AR = 4.5
 _CELL_MIN_RECTANGULARITY = 0.55
+# Reject when the DETECTED cell grid (not the padded card box) covers less
+# than this fraction of the detection-frame area. Measured on captured
+# frames: degenerate sliver detections (1-column / 6-9 cells) sit at
+# 0.009-0.045, while real full/partial grids are >= 0.066 — 0.05 splits them
+# cleanly. Gating the raw grid (before column reconstruction) is deliberate:
+# reconstruction inflates the card box, so gating the box would let tiny
+# grids through once padded.
+_MIN_GRID_AREA_FRAC = 0.05
 
 
 def _detect_cells_otsu(gray: np.ndarray):
@@ -165,9 +173,8 @@ def _find_quad_lowres(gray: np.ndarray):
     img_center = np.array([sw * 0.5, sh * 0.5], dtype=np.float32)
     img_diag = float(np.hypot(sw, sh))
 
-    best_rect = None
+    best_cells = None
     best_score = -1e9
-    best_cell_short = 0.0
     for indices in clusters:
         if len(indices) < _MIN_CELLS_PER_CLUSTER:
             continue
@@ -182,23 +189,84 @@ def _find_quad_lowres(gray: np.ndarray):
         score = len(indices) - 5.0 * cdist
         if score > best_score:
             best_score = score
-            best_rect = rect
-            best_cell_short = float(
-                np.median([min(c[2], c[3]) for c in cluster_cells]))
+            best_cells = cluster_cells
 
-    if best_rect is None:
+    if best_cells is None:
         return None
 
-    # Margin chosen to land the overlay on the card's outer border, not
-    # just the inner grid. The card extends roughly one cell short-side
-    # past the cell grid on each side.
-    margin = max(best_cell_short * 1.0, 6.0)
-    (cx, cy), (rw, rh), ang = best_rect
-    rw += 2.0 * margin
-    rh += 2.0 * margin
-    box = cv2.boxPoints(((cx, cy), (rw, rh), ang)).astype(np.float32)
+    # Build the overlay box from the cell GRID orientation, not from
+    # minAreaRect of the centroids. minAreaRect flips between landscape
+    # and portrait when columns are under-detected (the centroid spread
+    # becomes taller than wide) and its angle is unstable near square
+    # clusters. The cells themselves are reliably landscape and their
+    # median angle gives a stable card orientation.
+    pts = np.array([(c[0], c[1]) for c in best_cells], dtype=np.float32)
+    cell_short = float(np.median([min(c[2], c[3]) for c in best_cells]))
+    cell_long = float(np.median([max(c[2], c[3]) for c in best_cells]))
+    theta = np.deg2rad(float(np.median([c[5] for c in best_cells])))
+    cos_t, sin_t = float(np.cos(theta)), float(np.sin(theta))
+    # width axis = cell long-axis (card width); height axis perpendicular
+    w_axis = np.array([cos_t, sin_t], dtype=np.float32)
+    h_axis = np.array([-sin_t, cos_t], dtype=np.float32)
 
-    quad = order_quad_corners(box)
+    centroid = pts.mean(axis=0)
+    centered = pts - centroid
+    w_proj = centered @ w_axis
+    h_proj = centered @ h_axis
+
+    # Reject when the DETECTED cell grid is too small (the user wants the
+    # gate on the grid, not the reconstructed card box below). Measured on
+    # captured frames, degenerate sliver detections sit well under 0.05 of
+    # the detection-frame area while real grids are >= 0.066.
+    grid_w = float(w_proj.max() - w_proj.min()) + cell_long
+    grid_h = float(h_proj.max() - h_proj.min()) + cell_short
+    if grid_w * grid_h < _MIN_GRID_AREA_FRAC * sw * sh:
+        return None
+
+    margin = max(cell_short * 1.0, 6.0)
+    box_h = float(h_proj.max() - h_proj.min()) + cell_short + 2.0 * margin
+    cy_off = float((h_proj.max() + h_proj.min()) * 0.5)
+    cx_off = float((w_proj.max() + w_proj.min()) * 0.5)
+
+    # Reconstruct the full column span. Cells in one column share nearly the
+    # same w_proj (rows differ along h_axis), so sorting w_proj and splitting
+    # at gaps > half a cell yields one group per detected column. When fewer
+    # columns than the template are found (the transparent "measure" columns
+    # are easily missed by Otsu), extend the box to the full grid width using
+    # the column pitch, and decide which edge the missing columns sit on by
+    # recentring toward the frame centre (the card is guided to centre). This
+    # avoids the old symmetric stretch that pushed the box off the detected
+    # side. Orientation comes from w_axis (the cell long-axis), so a narrow
+    # box can never flip to portrait.
+    sorted_w = np.sort(w_proj)
+    splits = np.where(np.diff(sorted_w) > 0.5 * cell_long)[0]
+    group_bounds = np.concatenate(([0], splits + 1, [len(sorted_w)]))
+    group_centers = np.array(
+        [float(sorted_w[group_bounds[i]:group_bounds[i + 1]].mean())
+         for i in range(len(group_bounds) - 1)], dtype=np.float32)
+    n_det_cols = len(group_centers)
+
+    box_w = float(w_proj.max() - w_proj.min()) + cell_long + 2.0 * margin
+    deficit = (_EXPECTED_COLS - n_det_cols) if _EXPECTED_COLS >= 2 else 0
+    if deficit > 0 and n_det_cols >= 2:
+        pitch = float(np.median(np.diff(group_centers)))
+        if pitch > 1e-3:
+            box_w = (_EXPECTED_COLS - 1) * pitch + cell_long + 2.0 * margin
+            fc_w = float((img_center - centroid) @ w_axis)
+            shift = deficit * pitch * 0.5
+            cx_off += -shift if cx_off > fc_w else shift
+
+    center = centroid + cx_off * w_axis + cy_off * h_axis
+
+    hw, hh = box_w * 0.5, box_h * 0.5
+    corners = np.array([
+        center - hw * w_axis - hh * h_axis,
+        center + hw * w_axis - hh * h_axis,
+        center + hw * w_axis + hh * h_axis,
+        center - hw * w_axis + hh * h_axis,
+    ], dtype=np.float32)
+
+    quad = order_quad_corners(corners)
     if scale != 1.0:
         quad = (quad / scale).astype(np.float32)
     return quad
@@ -352,30 +420,21 @@ def _detect_warped_grid(warped_bgr: np.ndarray):
         for m in members:
             col_of[m] = ci
 
-    # Per (row, col) slot, keep cell whose centroid is closest to that
-    # row's median cy and that column's median cx (handles a rare case
-    # where two cells fall in the same slot).
+    # Equalized reconstruction. Every slot is rebuilt on a regular lattice:
+    # its column's median centre-x + median width and its row's median
+    # centre-y + median height. So all cells in a column share one width and
+    # all cells in a row share one height — detected cells no longer keep
+    # their own (often irregular) box, which made sampling inconsistent
+    # (e.g. the wide middle measure column varied 56..84 px). Per-column
+    # width is used because labels are wider than colour swatches, so a
+    # single global width would be wrong; the global median is only a
+    # fallback for a row/col with no detected cells. The flag at index 6
+    # ('det'/'est') drives overlay colour only, not geometry.
     row_med = [float(np.median(cy_arr[m])) for m in row_clusters]
     col_med = [float(np.median(cx_arr[m])) for m in col_clusters]
 
-    runtime_grid = {}
-    for idx, c in enumerate(clean):
-        ri = row_of[idx]
-        ci = col_of[idx]
-        d = (c[0] - col_med[ci]) ** 2 + (c[1] - row_med[ri]) ** 2
-        prev = runtime_grid.get((ri, ci))
-        if prev is None or d < prev[1]:
-            runtime_grid[(ri, ci)] = (c, d)
+    detected_slots = {(row_of[i], col_of[i]) for i in range(len(clean))}
 
-    runtime_grid = {k: v[0] for k, v in runtime_grid.items()}
-
-    # Grid completion: fill any missing (row, col) slots by intersecting the
-    # row's median cy with the column's median cx. Use the column's own
-    # median width (labels are wider than color swatches, so a global
-    # median picks the wrong size) and the row's own median height,
-    # falling back to the global median when a row/col has no detected
-    # cells. The slot tuple gets a synthetic flag at index 6 so debug
-    # code can color it differently.
     global_w = float(np.median([c[2] for c in clean]))
     global_h = float(np.median([c[3] for c in clean]))
     col_w = {
@@ -388,16 +447,15 @@ def _detect_warped_grid(warped_bgr: np.ndarray):
              if members else global_h)
         for ri, members in enumerate(row_clusters)
     }
+
+    runtime_grid = {}
     for ri in range(_EXPECTED_ROWS):
         for ci in range(_EXPECTED_COLS):
-            if (ri, ci) in runtime_grid:
-                continue
-            cx = col_med[ci]
-            cy = row_med[ri]
+            flag = 'det' if (ri, ci) in detected_slots else 'est'
             runtime_grid[(ri, ci)] = (
-                int(round(cx)), int(round(cy)),
+                int(round(col_med[ci])), int(round(row_med[ri])),
                 int(round(col_w[ci])), int(round(row_h[ri])),
-                0.0, 0.0, 'est',
+                0.0, 0.0, flag,
             )
 
     return runtime_grid, (rows, cols), clean
@@ -449,7 +507,11 @@ def _build_projections(labs_arr: np.ndarray):
     chroma = np.sqrt(A * A + B * B)
     hue = np.degrees(np.arctan2(B, A)) % 360.0
     # Drop low-saturation swatches from hue selection — hue is unreliable
-    # there. Keep enough to fit (>= 3) or skip the candidate.
+    # there. Keep enough to fit (>= 3) or skip the candidate. Gate stays
+    # at 10: loosening it pulls in washed-out frames where hue is noisy,
+    # which hurts consistency. When hue_lch is unavailable the picker
+    # falls back to pc1_lab (see DEFAULT_PROJECTION_PREFS), which is
+    # stable and doesn't collapse to the value floor like raw A/B.
     keep_hue = chroma > 10.0
     if int(keep_hue.sum()) >= 3:
         hue_kept = hue[keep_hue]
@@ -534,7 +596,7 @@ def _project_probe(lab_triple, descriptor, sign):
 # Per-parameter override goes in reference.json:
 #   parameters: [{name: 'pH', ..., preferred_projection: ['hue_lch', 'A']}]
 DEFAULT_PROJECTION_PREFS = {
-    'pH':   ('hue_lch', 'A'),
+    'pH':   ('hue_lch', 'pc1_lab', 'A'),
     'H2O2': ('pc1_lab', 'pc1_ab', 'B'),
     'PHMB': ('pc1_ab', 'B', 'hue_lch'),
 }
@@ -544,11 +606,13 @@ MIN_R_PREFERRED = 0.9
 def _measure_warped(warped: np.ndarray, runtime_grid: dict = None) -> dict:
     """Measure all parameters using runtime-only color regression.
 
-    If `runtime_grid` is supplied (the (row, col) -> detected-cell map from
-    _detect_warped_grid), sample at runtime-detected positions. Otherwise
-    fall back to reference.json's stored (x, y, w, h) — used when grid
-    re-detection has failed.
+    Requires `runtime_grid` (the (row, col) -> detected-cell map from
+    _detect_warped_grid). If it is None, returns {} — we never sample at
+    reference.json's stored pixel positions, which land on the wrong
+    spots and produce garbage readings.
     """
+    if runtime_grid is None:
+        return {}
     lab_warped = cv2.cvtColor(warped, cv2.COLOR_BGR2LAB)
     color_cells = [c for c in _REF['cells']
                    if c['is_color_cell'] and c['value'] is not None]
@@ -557,10 +621,7 @@ def _measure_warped(warped: np.ndarray, runtime_grid: dict = None) -> dict:
     out: dict = {}
 
     def _slot_for(c):
-        if runtime_grid is not None:
-            return runtime_grid.get((c['row_idx'], c['col_idx']))
-        return (c['x'] + c['w'] / 2.0, c['y'] + c['h'] / 2.0,
-                c['w'], c['h'])
+        return runtime_grid.get((c['row_idx'], c['col_idx']))
 
     for param in param_meta:
         p_colors = [c for c in color_cells if c['parameter'] == param]
@@ -713,22 +774,36 @@ def measure_rgba(rgba_bytes: bytes, width: int, height: int) -> dict:
          (x, y, w, h). The runtime-only color regression then runs against
          those samples.
 
-    If the runtime grid shape doesn't match expected (rows × cols), we fall
-    back to reference.json positions — better to attempt with possibly-off
-    samples than refuse to measure.
+    If the runtime grid can't be re-detected (shape doesn't match the
+    expected rows × cols), we DO NOT fall back to reference.json pixel
+    positions — those sample the wrong spots and produce garbage. We skip
+    the measurement and report grid detection failed.
     """
     arr = np.frombuffer(rgba_bytes, dtype=np.uint8).reshape(height, width, 4)
     bgr = cv2.cvtColor(arr, cv2.COLOR_RGBA2BGR)
     gray = cv2.cvtColor(bgr, cv2.COLOR_BGR2GRAY)
     quad = reference_builder._detect_reference_quad(gray, bgr)
     if quad is None:
-        return {'found': False, 'results': {}, 'quad': None, 'method': 'none'}
+        return {'found': False, 'results': {}, 'quad': None,
+                'method': 'none'}
     warped = _TRACKER.warp(bgr, quad)
 
-    runtime_grid, (gr_rows, gr_cols), _ = _detect_warped_grid(warped)
+    runtime_grid, (gr_rows, gr_cols), detected = _detect_warped_grid(warped)
     grid_status = (f'{gr_rows}x{gr_cols}'
                    f' ({"OK" if runtime_grid is not None else "mismatch"}'
                    f' / expected {_EXPECTED_ROWS}x{_EXPECTED_COLS})')
+
+    # Overlay showing exactly which cells were sampled (or, on failure, the
+    # raw detected cells) so the user can confirm the grid was found right.
+    overlay_jpg = _encode_jpg(
+        _render_grid_overlay(warped, runtime_grid, detected))
+
+    if runtime_grid is None:
+        # Grid re-detection failed — refuse to measure rather than sample
+        # at stale reference.json positions.
+        return {'found': True, 'results': {}, 'quad': quad.tolist(),
+                'method': 'cell_cluster', 'grid_status': grid_status,
+                'grid_ok': False, 'grid_overlay_jpg': overlay_jpg}
 
     results = _measure_warped(warped, runtime_grid=runtime_grid)
     return {
@@ -737,4 +812,41 @@ def measure_rgba(rgba_bytes: bytes, width: int, height: int) -> dict:
         'quad': quad.tolist(),
         'method': 'cell_cluster',
         'grid_status': grid_status,
+        'grid_ok': True,
+        'grid_overlay_jpg': overlay_jpg,
     }
+
+
+def _encode_jpg(bgr: np.ndarray) -> bytes:
+    ok, buf = cv2.imencode('.jpg', bgr,
+                           [int(cv2.IMWRITE_JPEG_QUALITY), 90])
+    return bytes(buf) if ok else b''
+
+
+def _render_grid_overlay(warped, runtime_grid, detected_cells):
+    """Draw the sampled grid on the warped image. Green = detected slot,
+    orange = estimated (filled-in) slot, each labeled 'row,col:value'. If
+    grid detection failed, draw the raw detected cells in red so the user
+    can see what went wrong."""
+    vis = warped.copy()
+    ref_cells = {(c['row_idx'], c['col_idx']): c for c in _REF.get('cells', [])}
+    if runtime_grid:
+        for (r, cc), s in runtime_grid.items():
+            cx, cy, w, h = s[0], s[1], s[2], s[3]
+            x, y = int(cx - w / 2), int(cy - h / 2)
+            est = len(s) > 6 and s[6] == 'est'
+            color = (0, 140, 255) if est else (0, 220, 0)
+            cv2.rectangle(vis, (x, y), (x + int(w), y + int(h)), color, 2)
+            refc = ref_cells.get((r, cc))
+            lbl = f'{r},{cc}'
+            if refc and refc.get('value') is not None:
+                lbl += ':' + str(refc['value'])
+            cv2.putText(vis, lbl, (x + 2, y + 14),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.35, color, 1)
+    else:
+        for c in (detected_cells or []):
+            cx, cy, w, h = c[0], c[1], c[2], c[3]
+            x, y = int(cx - w / 2), int(cy - h / 2)
+            cv2.rectangle(vis, (x, y), (x + int(w), y + int(h)),
+                          (0, 0, 220), 2)
+    return vis

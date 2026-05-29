@@ -29,7 +29,15 @@
       "Bash(python debug_one_frame.py)",
       "Bash(PYTHONIOENCODING=utf-8 python -c ' *)",
       "Bash(python _check_classify.py)",
-      "Bash(./gradlew installDebug)"
+      "Bash(./gradlew installDebug)",
+      "Bash(\"D:/Android/AndroidSDK/platform-tools/adb.exe\" devices *)",
+      "Bash(\"D:/Android/AndroidSDK/platform-tools/adb.exe\" shell *)",
+      "Bash(echo \"exit: $?\")",
+      "Bash(sed 's#frame_1778005034108#../reference_input/training/frame_1780070551005#' debug_one_frame.py)",
+      "Bash(python _dbg_new.py)",
+      "Bash(python _dbg_steps.py)",
+      "Bash(echo \"deleted, exit $?\")",
+      "Bash(python _strip_eval.py)"
     ]
   }
 }

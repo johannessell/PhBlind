@@ -3,6 +3,7 @@ package com.example.poolwatertester
 import android.Manifest
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.os.Bundle
 import android.util.Log
 import android.util.Size
@@ -198,6 +199,7 @@ class MainActivity : AppCompatActivity() {
         measuring = false
         measurement.callAttr("reset_stability")
         binding.overlay.clear()
+        binding.resultImage.visibility = View.GONE
         binding.results.visibility = View.GONE
         binding.results.text = ""
         binding.measureButton.text = "Measure"
@@ -218,27 +220,58 @@ class MainActivity : AppCompatActivity() {
                     val bitmap = image.toBitmap()
                     val rotation = image.imageInfo.rotationDegrees
                     image.close()
+                    val rotated = rotateBitmap(bitmap, rotation)
+                    // Freeze the view on the captured frame: stop showing the
+                    // live preview the moment the picture is taken.
+                    runOnUiThread {
+                        binding.overlay.clear()
+                        binding.resultImage.setImageBitmap(rotated)
+                        binding.resultImage.visibility = View.VISIBLE
+                        locked = true   // halt the analyzer
+                    }
                     cameraExecutor.execute {
-                        val rotated = rotateBitmap(bitmap, rotation)
                         val rgba = bitmapToRgbaBytes(rotated)
                         try {
                             val res = measurement.callAttr(
                                 "measure_rgba", rgba, rotated.width, rotated.height
                             )
-                            val text = formatResults(res)
-                            runOnUiThread {
-                                binding.results.text = text
-                                binding.measureButton.isEnabled = true
-                                binding.measureButton.text = "Reset"
-                                locked = true
-                                measuring = false
+                            if (isPlausible(res)) {
+                                val overlay = decodeOverlay(res)
+                                val text = formatResults(res)
+                                runOnUiThread {
+                                    if (overlay != null)
+                                        binding.resultImage.setImageBitmap(overlay)
+                                    binding.results.text = text
+                                    binding.results.visibility = View.VISIBLE
+                                    binding.measureButton.isEnabled = true
+                                    binding.measureButton.text = "Reset"
+                                    locked = true
+                                    measuring = false
+                                }
+                            } else {
+                                // No plausible reading — drop the frozen frame
+                                // and return to the live view to try again.
+                                runOnUiThread {
+                                    binding.resultImage.visibility = View.GONE
+                                    binding.results.visibility = View.GONE
+                                    binding.measureButton.isEnabled = true
+                                    binding.measureButton.text = "Measure"
+                                    binding.status.text = "no clear reading — keep steady"
+                                    locked = false
+                                    measuring = false
+                                    measurement.callAttr("reset_stability")
+                                }
                             }
                         } catch (e: Exception) {
                             Log.e(TAG, "measure failed", e)
                             runOnUiThread {
+                                binding.resultImage.visibility = View.GONE
                                 binding.results.text = "error: ${e.message}"
+                                binding.results.visibility = View.VISIBLE
                                 binding.measureButton.isEnabled = true
+                                locked = false
                                 measuring = false
+                                measurement.callAttr("reset_stability")
                             }
                         }
                     }
@@ -251,6 +284,32 @@ class MainActivity : AppCompatActivity() {
                     measuring = false
                 }
             })
+    }
+
+    /** Plausible = card found, grid re-detected OK, at least one parameter
+     *  measured. Drives "show result" vs "return to live view". */
+    private fun isPlausible(res: PyObject): Boolean {
+        val m = res.asMap()
+        val found = m[PyObject.fromJava("found")]?.toBoolean() ?: false
+        if (!found) return false
+        val gridOk = m[PyObject.fromJava("grid_ok")]?.toBoolean() ?: false
+        if (!gridOk) return false
+        val results = m[PyObject.fromJava("results")]?.asMap() ?: return false
+        return results.isNotEmpty()
+    }
+
+    /** Decode the warped+grid overlay JPEG returned by measure_rgba. */
+    private fun decodeOverlay(res: PyObject): Bitmap? {
+        val jpg = res.asMap()[PyObject.fromJava("grid_overlay_jpg")]
+            ?: return null
+        return try {
+            val bytes = jpg.toJava(ByteArray::class.java)
+            if (bytes.isEmpty()) null
+            else BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+        } catch (e: Exception) {
+            Log.w(TAG, "overlay decode failed", e)
+            null
+        }
     }
 
     private fun saveTrainingFrame() {

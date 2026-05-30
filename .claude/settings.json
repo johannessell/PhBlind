@@ -37,7 +37,16 @@
       "Bash(python _dbg_new.py)",
       "Bash(python _dbg_steps.py)",
       "Bash(echo \"deleted, exit $?\")",
-      "Bash(python _strip_eval.py)"
+      "Bash(python _strip_eval.py)",
+      "Bash(./gradlew.bat :app:compileDebugKotlin --console=plain)",
+      "PowerShell($paths=@\\('C:\\\\Program Files\\\\Android\\\\Android Studio\\\\jbr\\\\bin\\\\java.exe','C:\\\\Program Files\\\\Java','C:\\\\Program Files\\\\Eclipse Adoptium','C:\\\\Users\\\\johan\\\\AppData\\\\Local\\\\Programs\\\\Java','C:\\\\Users\\\\johan\\\\AppData\\\\Local\\\\Programs\\\\Android Studio\\\\jbr\\\\bin\\\\java.exe','C:\\\\Program Files\\\\JetBrains'\\); foreach\\($p in $paths\\){ if\\(Test-Path $p\\){ Write-Output \"FOUND: $p\"; if\\(\\(Get-Item $p\\).PSIsContainer\\){ Get-ChildItem $p -Depth 1 -ErrorAction SilentlyContinue | Select-Object -First 5 | ForEach-Object { Write-Output \\('  ' + $_.FullName\\) } } } else { Write-Output \"missing: $p\" } })",
+      "PowerShell($env:JAVA_HOME='C:\\\\Program Files\\\\JetBrains\\\\PyCharm 2025.2.0.1\\\\jbr'; $env:Path = \"$env:JAVA_HOME\\\\bin;$env:Path\"; cd android\\\\PoolWaterTester; .\\\\gradlew.bat :app:compileDebugKotlin --console=plain 2>&1 | Select-Object -Last 60)",
+      "PowerShell(Get-ChildItem 'C:\\\\Users\\\\johan\\\\PycharmProjects\\\\PhBlind\\\\android\\\\PoolWaterTester\\\\app\\\\src\\\\main\\\\res' -Directory | ForEach-Object { $_.Name })",
+      "PowerShell(Get-ChildItem 'C:\\\\Users\\\\johan\\\\PycharmProjects\\\\PhBlind\\\\android\\\\PoolWaterTester\\\\app\\\\src\\\\main\\\\res\\\\drawable' | ForEach-Object { $_.Name })",
+      "PowerShell($env:JAVA_HOME='C:\\\\Program Files\\\\JetBrains\\\\PyCharm 2025.2.0.1\\\\jbr'; $env:Path = \"$env:JAVA_HOME\\\\bin;$env:Path\"; Set-Location 'C:\\\\Users\\\\johan\\\\PycharmProjects\\\\PhBlind\\\\android\\\\PoolWaterTester'; .\\\\gradlew.bat :app:compileDebugKotlin --console=plain 2>&1 | Select-Object -Last 80)",
+      "PowerShell($env:JAVA_HOME='C:\\\\Program Files\\\\JetBrains\\\\PyCharm 2025.2.0.1\\\\jbr'; $env:Path = \"$env:JAVA_HOME\\\\bin;$env:Path\"; Set-Location 'C:\\\\Users\\\\johan\\\\PycharmProjects\\\\PhBlind\\\\android\\\\PoolWaterTester'; .\\\\gradlew.bat :app:compileDebugKotlin --console=plain 2>&1 | Select-Object -Last 50)",
+      "PowerShell($env:JAVA_HOME='C:\\\\Program Files\\\\JetBrains\\\\PyCharm 2025.2.0.1\\\\jbr'; $env:Path = \"$env:JAVA_HOME\\\\bin;$env:Path\"; Set-Location 'C:\\\\Users\\\\johan\\\\PycharmProjects\\\\PhBlind\\\\android\\\\PoolWaterTester'; .\\\\gradlew.bat :app:assembleDebug --console=plain 2>&1 | Select-Object -Last 50)",
+      "PowerShell($env:JAVA_HOME='C:\\\\Program Files\\\\JetBrains\\\\PyCharm 2025.2.0.1\\\\jbr'; $env:Path = \"$env:JAVA_HOME\\\\bin;$env:Path\"; Set-Location 'C:\\\\Users\\\\johan\\\\PycharmProjects\\\\PhBlind\\\\android\\\\PoolWaterTester'; .\\\\gradlew.bat :app:compileDebugKotlin --console=plain 2>&1 | Select-Object -Last 25)"
     ]
   }
 }

@@ -25,6 +25,13 @@ class TrendChartView @JvmOverloads constructor(
     context: Context, attrs: AttributeSet? = null, defStyleAttr: Int = 0,
 ) : View(context, attrs, defStyleAttr) {
 
+    init {
+        // Without this, View base class ignores ACTION_DOWN, so we never get
+        // ACTION_UP back here and the tap-to-point callback can't fire.
+        isClickable = true
+        isFocusable = true
+    }
+
     data class Point(val ts: Long, val y: Float)
     enum class MarkerShape { CIRCLE, SQUARE, TRIANGLE }
 
@@ -191,18 +198,24 @@ class TrendChartView @JvmOverloads constructor(
     }
 
     override fun onTouchEvent(event: MotionEvent): Boolean {
-        if (event.actionMasked != MotionEvent.ACTION_UP) return super.onTouchEvent(event)
-        val cb = onPointTap ?: return false
-        val tapR = dp(20f)
-        var best: PointF2? = null; var bestD = Float.MAX_VALUE
-        for (pp in pxPositions) {
-            val d = hypot(event.x - pp.x, event.y - pp.y)
-            if (d < bestD) { bestD = d; best = pp }
+        // Always let the base class handle ACTION_DOWN / cancel transitions
+        // so pressed-state is set and ACTION_UP arrives back here. We only
+        // *also* dispatch the tap callback on ACTION_UP.
+        if (event.actionMasked == MotionEvent.ACTION_UP) {
+            val cb = onPointTap
+            if (cb != null) {
+                // Generous tap radius — markers are 9dp across; 32dp covers a
+                // typical finger pad without grabbing far-away points.
+                val tapR = dp(32f)
+                var best: PointF2? = null; var bestD = Float.MAX_VALUE
+                for (pp in pxPositions) {
+                    val d = hypot(event.x - pp.x, event.y - pp.y)
+                    if (d < bestD) { bestD = d; best = pp }
+                }
+                if (best != null && bestD <= tapR) cb(best.ts)
+            }
         }
-        if (best != null && bestD <= tapR) {
-            cb(best.ts); performClick(); return true
-        }
-        return false
+        return super.onTouchEvent(event)
     }
 
     override fun performClick(): Boolean = super.performClick()

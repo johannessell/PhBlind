@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="wrap_content"
+    android:layout_height="wrap_content"
+    android:padding="6dp">
+
+    <!-- Lives in the rail's headerLayout when landscape. Keeps the same
+         id the host code resolves via ViewBinding. -->
+    <com.google.android.material.chip.Chip
+        android:id="@+id/profileChip"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="@string/profile_default_name"
+        app:chipIcon="@drawable/ic_nav_settings"
+        app:chipIconVisible="true"
+        app:chipIconSize="16dp"
+        xmlns:app="http://schemas.android.com/apk/res-auto" />
+
+</FrameLayout>

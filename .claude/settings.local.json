@@ -2,7 +2,12 @@
   "permissions": {
     "allow": [
       "Bash(python -c ' *)",
-      "Bash(python test_lowres_tracker.py)"
+      "Bash(python test_lowres_tracker.py)",
+      "PowerShell($env:JAVA_HOME='D:\\\\Android\\\\Android Studio\\\\jbr'; $env:Path=\"$env:JAVA_HOME\\\\bin;$env:Path\"; Set-Location 'C:\\\\Users\\\\johan\\\\PycharmProjects\\\\PhBlind\\\\android\\\\PoolWaterTester'; .\\\\gradlew.bat :app:assembleDebug --console=plain 2>&1 | Select-Object -Last 15)",
+      "Bash(cat)",
+      "Bash(PATH=/d/Android/AndroidSDK/platform-tools:__TRACKED_VAR__ adb shell run-as com.example.poolwatertester cat files/history_27cddd44-0aba-4b34-b24b-cbfea14aa827.json)",
+      "Bash(python /tmp/_correct_history.py _correct/old.json _correct/new.json)",
+      "Bash(git add *)"
     ]
   }
 }

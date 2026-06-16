@@ -28,8 +28,8 @@ class ReminderReceiver : BroadcastReceiver() {
         )
         val notif = NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_nav_measure)
-            .setContentTitle("Time to test your pool water")
-            .setContentText("Open the app to take a measurement.")
+            .setContentTitle(context.getString(R.string.notif_title))
+            .setContentText(context.getString(R.string.notif_text))
             .setContentIntent(pi)
             .setAutoCancel(true)
             .setPriority(NotificationCompat.PRIORITY_DEFAULT)
@@ -49,10 +49,10 @@ class ReminderReceiver : BroadcastReceiver() {
                 as NotificationManager
             if (nm.getNotificationChannel(CHANNEL_ID) != null) return
             val channel = NotificationChannel(
-                CHANNEL_ID, "Pool water reminders",
+                CHANNEL_ID, context.getString(R.string.notif_channel_name),
                 NotificationManager.IMPORTANCE_DEFAULT
             ).apply {
-                description = "Reminds you to test your pool water."
+                description = context.getString(R.string.notif_channel_description)
             }
             nm.createNotificationChannel(channel)
         }

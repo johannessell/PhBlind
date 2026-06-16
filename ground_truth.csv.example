@@ -1,0 +1,9 @@
+ts,param,value
+# Copy this file to ground_truth.csv and fill in your human visual
+# estimate per frame×parameter. ts is the folder name under
+# phone_measurements/<ts>/, param is "pH" / "H2O2" / "PHMB",
+# value is the number your eye reads off the strip.
+# Example rows:
+# 1780073195000,pH,7.8
+# 1780073195000,H2O2,55
+# 1780073199000,pH,7.6

@@ -11,11 +11,14 @@ import android.view.ViewGroup
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
+import androidx.appcompat.app.AlertDialog
 import com.example.poolwatertester.R
 import com.example.poolwatertester.data.HistoryEntry
+import com.example.poolwatertester.data.HistoryStore
 import com.example.poolwatertester.data.SettingsStore
 import com.example.poolwatertester.data.Status
 import com.google.android.material.bottomsheet.BottomSheetDialogFragment
+import com.google.android.material.button.MaterialButton
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -28,6 +31,7 @@ class HistoryDetailBottomSheet : BottomSheetDialogFragment() {
 
     private var entry: HistoryEntry? = null
     private var settingsStore: SettingsStore? = null
+    private var onDeleted: (() -> Unit)? = null
 
     override fun onCreateView(
         inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?
@@ -36,7 +40,7 @@ class HistoryDetailBottomSheet : BottomSheetDialogFragment() {
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
         val e = entry ?: return run { dismiss(); Unit }
-        val store = settingsStore ?: SettingsStore(requireContext())
+        val store = settingsStore ?: SettingsStore.forActive(requireContext())
 
         val title = view.findViewById<TextView>(R.id.detailTitle)
         val overlay = view.findViewById<ImageView>(R.id.detailOverlay)
@@ -62,6 +66,21 @@ class HistoryDetailBottomSheet : BottomSheetDialogFragment() {
             val status = range?.classify(value) ?: Status.UNKNOWN
             rows.addView(buildRow(param, value, status))
         }
+
+        view.findViewById<MaterialButton>(R.id.detailDeleteButton)
+            .setOnClickListener {
+                AlertDialog.Builder(requireContext())
+                    .setTitle(R.string.confirm_delete_one_title)
+                    .setMessage(R.string.confirm_delete_one_message)
+                    .setNegativeButton(R.string.cancel, null)
+                    .setPositiveButton(R.string.history_delete) { _, _ ->
+                        HistoryStore.forActive(requireContext())
+                            .deleteByTs(e.ts)
+                        onDeleted?.invoke()
+                        dismiss()
+                    }
+                    .show()
+            }
     }
 
     private fun buildRow(param: String, value: Float, status: Status): View {
@@ -103,10 +122,15 @@ class HistoryDetailBottomSheet : BottomSheetDialogFragment() {
     private fun dp(v: Int): Int = (v * resources.displayMetrics.density).toInt()
 
     companion object {
-        fun newInstance(entry: HistoryEntry, settings: SettingsStore): HistoryDetailBottomSheet {
+        fun newInstance(
+            entry: HistoryEntry,
+            settings: SettingsStore,
+            onDeleted: (() -> Unit)? = null,
+        ): HistoryDetailBottomSheet {
             return HistoryDetailBottomSheet().also {
                 it.entry = entry
                 it.settingsStore = settings
+                it.onDeleted = onDeleted
             }
         }
     }

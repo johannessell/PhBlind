@@ -1,0 +1,125 @@
+<resources>
+    <string name="app_name">PoolWaterTester</string>
+
+    <!-- bottom nav -->
+    <string name="nav_measure">Messen</string>
+    <string name="nav_history">Verlauf</string>
+    <string name="nav_settings">Einstellungen</string>
+
+    <!-- measure -->
+    <string name="measure">Messen</string>
+    <string name="save">Speichern</string>
+    <string name="discard">Verwerfen</string>
+    <string name="reset">Zurücksetzen</string>
+    <string name="edit_reference">Referenz bearbeiten</string>
+    <string name="save_frame">Bild speichern</string>
+    <string name="status_starting">starte…</string>
+    <string name="status_searching">suche…</string>
+    <string name="status_tracking">verfolge %1$d/%2$d</string>
+    <string name="status_measuring">messe…</string>
+    <string name="status_no_clear_reading">kein klares Ergebnis — ruhig halten</string>
+    <string name="status_param_unreliable">%1$s konnte nicht zuverlässig gemessen werden — bitte erneut aufnehmen</string>
+    <string name="status_card_too_far">Karte zu weit weg — näher heran</string>
+    <string name="status_card_too_close">Karte zu nah — etwas zurück</string>
+    <string name="status_card_too_tilted">Karte zu schief — gerade halten</string>
+    <string name="status_hold_steady">ruhig halten</string>
+    <string name="status_camera_denied">Kamera-Zugriff verweigert</string>
+    <string name="status_bind_failed">Kamera-Bindung fehlgeschlagen: %1$s</string>
+    <string name="status_capture_error">Aufnahme-Fehler: %1$s</string>
+    <string name="status_error">Fehler: %1$s</string>
+    <string name="result_image_description">Mess-Ergebnis mit Raster</string>
+    <string name="recent_card_title">Letzte gespeicherte Messung</string>
+    <string name="snack_saved">Gespeichert</string>
+    <string name="snack_discarded">Verworfen</string>
+    <string name="snack_deleted">Gelöscht</string>
+    <string name="snack_cleared">%1$d Eintr%2$s gelöscht</string>
+    <string name="entry_singular">ag</string>
+    <string name="entry_plural">äge</string>
+    <string name="snack_imported">%1$d Eintr%2$s importiert</string>
+    <string name="snack_exported">Exportiert nach %1$s</string>
+    <string name="snack_export_failed">Export fehlgeschlagen</string>
+    <string name="snack_import_failed">Import fehlgeschlagen</string>
+    <string name="snack_reminder_on">Erinnerung aktiviert</string>
+    <string name="snack_reminder_off">Erinnerung deaktiviert</string>
+
+    <!-- history -->
+    <string name="history_title">Verlauf</string>
+    <string name="history_clear">Leeren</string>
+    <string name="history_empty">Noch keine Messungen</string>
+    <string name="history_delete">Löschen</string>
+    <string name="confirm_delete_one_title">Diese Messung löschen?</string>
+    <string name="confirm_delete_one_message">Das Rohbild und das Raster bleiben auf der Festplatte für Replays. Aktion nicht umkehrbar.</string>
+    <string name="confirm_clear_all_title">Alle Messungen löschen?</string>
+    <string name="confirm_clear_all_message">Entfernt alle Verlauf-Einträge für diesen Pool. Rohbilder bleiben erhalten.</string>
+    <string name="cancel">Abbrechen</string>
+    <string name="ok">OK</string>
+
+    <!-- chart status pills -->
+    <string name="pill_in_range">✓ OK</string>
+    <string name="pill_near">⚠ NAH</string>
+    <string name="pill_out">✕ AUS</string>
+    <string name="pill_unknown">?</string>
+
+    <!-- statistics -->
+    <string name="stats_title">Statistik (letzte 30 Tage)</string>
+    <string name="stats_mean">Mittel</string>
+    <string name="stats_delta">Δ7T</string>
+    <string name="stats_in_range">im Bereich</string>
+
+    <!-- settings -->
+    <string name="settings_ranges_header">Sollbereiche</string>
+    <string name="settings_reminder_header">Erinnerung</string>
+    <string name="settings_reminder_switch">An Wassertest erinnern</string>
+    <string name="settings_reminder_days_label">Alle (Tage)</string>
+    <string name="settings_reminder_time_label">Um Uhrzeit</string>
+    <string name="settings_reminder_default_time">09:00</string>
+    <string name="settings_reminder_off">Erinnerungen aus</string>
+    <string name="settings_reminder_on">Nächste Erinnerung ungefähr alle %1$d Tag(e) um %2$s</string>
+    <string name="settings_reminder_asking">Erbitte Benachrichtigungs-Berechtigung…</string>
+    <string name="settings_reminder_denied">Benachrichtigungen verweigert — Erinnerungen aus</string>
+    <string name="settings_tts_header">Sprachausgabe</string>
+    <string name="settings_tts_switch">Ergebnis nach Speichern vorlesen</string>
+    <string name="settings_backup_header">Sicherung</string>
+    <string name="settings_backup_export">Verlauf exportieren (CSV)</string>
+    <string name="settings_backup_import">Verlauf importieren (CSV)</string>
+    <string name="settings_profile_header">Aktiver Pool</string>
+    <string name="settings_profile_note">Der Pool wird oben über das Chip-Element gewechselt.</string>
+    <string name="range_min">min</string>
+    <string name="range_ideal">ideal</string>
+    <string name="range_max">max</string>
+
+    <!-- profiles -->
+    <string name="profile_default_name">Mein Pool</string>
+    <string name="profile_switcher_title">Pool wechseln</string>
+    <string name="profile_add">Pool hinzufügen</string>
+    <string name="profile_rename">Umbenennen</string>
+    <string name="profile_delete">Löschen</string>
+    <string name="profile_name_hint">Name des Pools</string>
+    <string name="profile_create_title">Neuer Pool</string>
+    <string name="profile_rename_title">Pool umbenennen</string>
+    <string name="confirm_delete_profile_title">Diesen Pool löschen?</string>
+    <string name="confirm_delete_profile_message">Entfernt Verlauf und Bereiche. Aktion nicht umkehrbar.</string>
+
+    <!-- onboarding -->
+    <string name="onboarding_next">Weiter</string>
+    <string name="onboarding_done">Fertig</string>
+    <string name="onboarding_skip">Überspringen</string>
+    <string name="onboarding_page1_title">Karte ausrichten</string>
+    <string name="onboarding_page1_body">Lege die Teststreifen-Karte flach unter gutes Licht. Passe sie in das gestrichelte Rechteck ein und halte ruhig — die Markierung wird grün, sobald sie eingerastet ist.</string>
+    <string name="onboarding_page2_title">Sollbereiche festlegen</string>
+    <string name="onboarding_page2_body">Lege für jeden Parameter den zulässigen Bereich fest. Du kannst die Werte jederzeit in den Einstellungen ändern.</string>
+    <string name="onboarding_page3_title">Im Rhythmus bleiben</string>
+    <string name="onboarding_page3_body">Aktiviere die Erinnerung, damit du den wöchentlichen Test nicht vergisst.</string>
+
+    <!-- reminder notification -->
+    <string name="notif_channel_name">Pool-Erinnerungen</string>
+    <string name="notif_channel_description">Erinnert dich, das Poolwasser zu testen.</string>
+    <string name="notif_title">Zeit für den Wassertest</string>
+    <string name="notif_text">Öffne die App, um eine Messung durchzuführen.</string>
+
+    <!-- widget -->
+    <string name="widget_description">Letzte Messung + nächste Erinnerung</string>
+    <string name="widget_empty">Noch keine Messungen</string>
+    <string name="widget_next_reminder">Nächste Erinnerung: %1$s</string>
+    <string name="widget_no_reminder">Keine Erinnerung</string>
+</resources>

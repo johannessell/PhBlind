@@ -587,38 +587,58 @@ def _project_probe(lab_triple, descriptor, sign):
 
 
 # Per-parameter preferred projection order. The picker tries each in order
-# and uses the FIRST one whose runtime |r| clears MIN_R_PREFERRED. Falls
-# back to "best |r|" search if no preferred candidate qualifies. Reasoning:
-#   pH walks along a hue arc → hue_lch is the natural axis.
-#   H2O2 walks across both lightness and chroma → pc1_lab.
-#   PHMB has small pure-chroma variation → pc1_ab is most stable; B as
-#     backup since the chroma path is roughly along the b axis.
+# and uses the FIRST one whose runtime |r| clears MIN_R_PREFERRED. For
+# parameters in STRICT_PROJECTIONS we refuse to fall back to the global
+# max-|r| candidate — it would just silently substitute a method we know
+# to be biased on this corpus. The measurement is reported as an error so
+# the UI can ask the user to retake the shot.
+#
+# Reasoning behind the picks (validated on phone_measurements/):
+#   pH:    L+A+B all change along the strip → pc1_lab captures lightness,
+#          A is the most useful single chromatic axis. STRICT — hue_lch,
+#          B and pc1_ab were all biased ~+0.2 vs human estimate.
+#   H2O2:  walks across both lightness and chroma → pc1_lab; pc1_ab and B
+#          as graceful fallbacks.
+#   PHMB:  small pure-chroma variation → pc1_ab is most stable; B as
+#          backup since the chroma path is roughly along the b axis.
+#
 # Per-parameter override goes in reference.json:
-#   parameters: [{name: 'pH', ..., preferred_projection: ['hue_lch', 'A']}]
+#   parameters: [{name: 'pH', ..., preferred_projection: ['pc1_lab','A']}]
 DEFAULT_PROJECTION_PREFS = {
-    'pH':   ('hue_lch', 'pc1_lab', 'A'),
+    'pH':   ('pc1_lab', 'A'),
     'H2O2': ('pc1_lab', 'pc1_ab', 'B'),
     'PHMB': ('pc1_ab', 'B', 'hue_lch'),
 }
+# Parameters here NEVER fall back to global max-|r|; if no preferred
+# candidate clears MIN_R_PREFERRED the parameter is reported as an error.
+STRICT_PROJECTIONS = {'pH'}
 MIN_R_PREFERRED = 0.9
 
 
-def _measure_warped(warped: np.ndarray, runtime_grid: dict = None) -> dict:
+def _measure_warped(warped: np.ndarray, runtime_grid: dict = None):
     """Measure all parameters using runtime-only color regression.
 
     Requires `runtime_grid` (the (row, col) -> detected-cell map from
-    _detect_warped_grid). If it is None, returns {} — we never sample at
-    reference.json's stored pixel positions, which land on the wrong
-    spots and produce garbage readings.
+    _detect_warped_grid). If it is None, returns ({}, {}) — we never
+    sample at reference.json's stored pixel positions, which land on the
+    wrong spots and produce garbage readings.
+
+    Returns (results, errors). `results` is {param: {value, channel, r,
+    rmse}} for parameters that produced a trusted reading; `errors` is
+    {param: {reason, ...}} for parameters listed in STRICT_PROJECTIONS
+    where no preferred projection met the |r| threshold, so the caller
+    can ask the user to retake the shot instead of saving a biased
+    number.
     """
     if runtime_grid is None:
-        return {}
+        return {}, {}
     lab_warped = cv2.cvtColor(warped, cv2.COLOR_BGR2LAB)
     color_cells = [c for c in _REF['cells']
                    if c['is_color_cell'] and c['value'] is not None]
     measure_cells = [c for c in _REF['cells'] if not c['is_color_cell']]
     param_meta = {p['name']: p for p in _REF['parameters']}
     out: dict = {}
+    errors: dict = {}
 
     def _slot_for(c):
         return runtime_grid.get((c['row_idx'], c['col_idx']))
@@ -666,16 +686,31 @@ def _measure_warped(warped: np.ndarray, runtime_grid: dict = None) -> dict:
             continue
 
         # Pick by per-parameter preferred order if any preferred candidate
-        # has |r| >= MIN_R_PREFERRED. Otherwise fall back to global best.
+        # has |r| >= MIN_R_PREFERRED. For STRICT params (e.g. pH) we
+        # refuse the global-max-|r| fallback: substituting a method we
+        # know is biased on this strip would silently produce a wrong
+        # reading. Instead we record an error and skip the parameter.
         prefs = (param_meta[param].get('preferred_projection')
                  or DEFAULT_PROJECTION_PREFS.get(param, ()))
         chosen = None
+        best_pref_r = 0.0
         for pref in prefs:
             ev = evaluated.get(pref)
-            if ev is not None and abs(ev[0]) >= MIN_R_PREFERRED:
+            if ev is None:
+                continue
+            best_pref_r = max(best_pref_r, abs(ev[0]))
+            if abs(ev[0]) >= MIN_R_PREFERRED:
                 chosen = pref
                 break
         if chosen is None:
+            if param in STRICT_PROJECTIONS:
+                errors[param] = {
+                    'reason': 'no_preferred_method_qualified',
+                    'preferred': list(prefs),
+                    'min_r_required': MIN_R_PREFERRED,
+                    'best_preferred_r': round(best_pref_r, 3),
+                }
+                continue
             chosen = max(evaluated, key=lambda n: abs(evaluated[n][0]))
 
         best_r, x_fit, y_fit, _msk, best_desc = evaluated[chosen]
@@ -720,7 +755,7 @@ def _measure_warped(warped: np.ndarray, runtime_grid: dict = None) -> dict:
             'rmse': round(rmse, 3),
         }
 
-    return out
+    return out, errors
 
 
 def find_quad_y(y_bytes: bytes, width: int, height: int,
@@ -746,6 +781,28 @@ def find_quad_y(y_bytes: bytes, width: int, height: int,
 
     quad = _find_quad_lowres(gray)
     stable = _STABILITY.update(quad)
+    H, W = gray.shape[:2]
+    tilt_deg = 0.0
+    area_frac = 0.0
+    if quad is not None:
+        # Card long axis ≈ q[0]→q[1] in canonical ordering. Report its angle
+        # from the horizontal in [0, 90] so the Kotlin side can threshold a
+        # single absolute number.
+        q = quad.reshape(4, 2)
+        dx = float(q[1, 0] - q[0, 0])
+        dy = float(q[1, 1] - q[0, 1])
+        ang = float(np.degrees(np.arctan2(dy, dx)))
+        while ang > 90.0:
+            ang -= 180.0
+        while ang < -90.0:
+            ang += 180.0
+        tilt_deg = abs(ang)
+        # Shoelace area for the polygon.
+        a = 0.0
+        for i in range(4):
+            j = (i + 1) % 4
+            a += q[i, 0] * q[j, 1] - q[j, 0] * q[i, 1]
+        area_frac = float(abs(a) * 0.5 / float(W * H))
     return {
         'found': quad is not None,
         'quad': quad.tolist() if quad is not None else None,
@@ -753,8 +810,13 @@ def find_quad_y(y_bytes: bytes, width: int, height: int,
         'stable': bool(stable),
         'progress': int(_STABILITY.progress()),
         'required': int(_STABILITY.required),
-        'width': int(gray.shape[1]),
-        'height': int(gray.shape[0]),
+        'width': int(W),
+        'height': int(H),
+        'tilt_deg': float(tilt_deg),
+        'area_frac': float(area_frac),
+        # Target fraction the card should cover — the guide rect on the
+        # OverlayView is sized so the card snugly fits ~0.4 of the frame.
+        'expected_area_frac': 0.40,
     }
 
 
@@ -801,14 +863,15 @@ def measure_rgba(rgba_bytes: bytes, width: int, height: int) -> dict:
     if runtime_grid is None:
         # Grid re-detection failed — refuse to measure rather than sample
         # at stale reference.json positions.
-        return {'found': True, 'results': {}, 'quad': quad.tolist(),
+        return {'found': True, 'results': {}, 'errors': {}, 'quad': quad.tolist(),
                 'method': 'cell_cluster', 'grid_status': grid_status,
                 'grid_ok': False, 'grid_overlay_jpg': overlay_jpg}
 
-    results = _measure_warped(warped, runtime_grid=runtime_grid)
+    results, errors = _measure_warped(warped, runtime_grid=runtime_grid)
     return {
         'found': True,
         'results': results,
+        'errors': errors,
         'quad': quad.tolist(),
         'method': 'cell_cluster',
         'grid_status': grid_status,

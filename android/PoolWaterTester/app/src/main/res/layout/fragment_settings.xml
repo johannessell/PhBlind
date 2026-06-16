@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <androidx.core.widget.NestedScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:id="@+id/settingsRoot"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
@@ -11,10 +12,11 @@
         android:orientation="vertical"
         android:padding="16dp">
 
+        <!-- Target ranges -->
         <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="Target Ranges"
+            android:text="@string/settings_ranges_header"
             android:textSize="18sp"
             android:textStyle="bold"
             android:paddingBottom="8dp" />
@@ -26,10 +28,11 @@
             android:orientation="vertical"
             android:paddingBottom="16dp" />
 
+        <!-- Reminder -->
         <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="Reminder"
+            android:text="@string/settings_reminder_header"
             android:textSize="18sp"
             android:textStyle="bold"
             android:paddingTop="8dp"
@@ -39,7 +42,7 @@
             android:id="@+id/reminderSwitch"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="Remind me to test water"
+            android:text="@string/settings_reminder_switch"
             android:paddingTop="4dp"
             android:paddingBottom="8dp" />
 
@@ -55,7 +58,7 @@
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
-                android:text="Every (days)" />
+                android:text="@string/settings_reminder_days_label" />
 
             <EditText
                 android:id="@+id/reminderDays"
@@ -80,14 +83,14 @@
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
-                android:text="At time" />
+                android:text="@string/settings_reminder_time_label" />
 
             <Button
                 android:id="@+id/reminderTimeButton"
                 style="?attr/materialButtonOutlinedStyle"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="09:00" />
+                android:text="@string/settings_reminder_default_time" />
 
         </LinearLayout>
 
@@ -96,8 +99,71 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:textSize="12sp"
-            android:paddingTop="8dp"
+            android:paddingTop="4dp"
+            android:paddingBottom="16dp"
             android:textColor="?attr/colorOnSurfaceVariant" />
+
+        <!-- Voice readout (TTS) -->
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/settings_tts_header"
+            android:textSize="18sp"
+            android:textStyle="bold"
+            android:paddingTop="8dp"
+            android:paddingBottom="8dp" />
+
+        <com.google.android.material.materialswitch.MaterialSwitch
+            android:id="@+id/ttsSwitch"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/settings_tts_switch"
+            android:paddingTop="4dp"
+            android:paddingBottom="16dp" />
+
+        <!-- Backup -->
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/settings_backup_header"
+            android:textSize="18sp"
+            android:textStyle="bold"
+            android:paddingTop="8dp"
+            android:paddingBottom="8dp" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/exportButton"
+            style="?attr/materialButtonOutlinedStyle"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/settings_backup_export"
+            android:layout_marginBottom="4dp" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/importButton"
+            style="?attr/materialButtonOutlinedStyle"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/settings_backup_import"
+            android:layout_marginBottom="16dp" />
+
+        <!-- Active pool note -->
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/settings_profile_header"
+            android:textSize="18sp"
+            android:textStyle="bold"
+            android:paddingTop="8dp"
+            android:paddingBottom="4dp" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/settings_profile_note"
+            android:textSize="12sp"
+            android:textColor="?attr/colorOnSurfaceVariant"
+            android:paddingBottom="16dp" />
 
     </LinearLayout>
 

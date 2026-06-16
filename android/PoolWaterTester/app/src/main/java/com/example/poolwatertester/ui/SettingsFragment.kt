@@ -15,14 +15,19 @@ import android.view.ViewGroup
 import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.TextView
+import android.net.Uri
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.ContextCompat
 import androidx.fragment.app.Fragment
 import com.example.poolwatertester.R
+import com.example.poolwatertester.data.HistoryCsv
+import com.example.poolwatertester.data.HistoryStore
+import com.example.poolwatertester.data.ProfilesStore
 import com.example.poolwatertester.data.SettingsStore
 import com.example.poolwatertester.data.TargetRange
 import com.example.poolwatertester.reminder.ReminderReceiver
 import com.example.poolwatertester.reminder.ReminderScheduler
+import com.google.android.material.button.MaterialButton
 import com.google.android.material.materialswitch.MaterialSwitch
 import java.util.Locale
 
@@ -39,19 +44,18 @@ class SettingsFragment : Fragment() {
         ActivityResultContracts.RequestPermission()
     ) { granted ->
         if (granted) {
-            // Permission accepted — proceed with scheduling.
             scheduleNow()
+            snack(getString(R.string.snack_reminder_on))
         } else {
-            // Revert the switch; persisted state stays "off".
             reminderSwitchRef?.isChecked = false
             store.reminderEnabled = false
-            reminderStatusRef?.text = "Notifications denied — reminders disabled"
+            reminderStatusRef?.text = getString(R.string.settings_reminder_denied)
         }
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        store = SettingsStore(requireContext())
+        store = SettingsStore.forActive(requireContext())
         store.seedDefaultsIfMissing(SettingsStore.DEFAULT_RANGES.keys)
         ReminderReceiver.ensureChannel(requireContext())
     }
@@ -60,10 +64,65 @@ class SettingsFragment : Fragment() {
         inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?
     ): View = inflater.inflate(R.layout.fragment_settings, container, false)
 
+    private val exportLauncher = registerForActivityResult(
+        ActivityResultContracts.CreateDocument("text/csv")
+    ) { uri: Uri? ->
+        if (uri == null) return@registerForActivityResult
+        try {
+            val profile = ProfilesStore(requireContext()).active()
+            val entries = HistoryStore.forActive(requireContext()).loadAll()
+            val csv = HistoryCsv.toCsv(entries, profile.id, profile.name)
+            requireContext().contentResolver.openOutputStream(uri)?.use {
+                it.write(csv.toByteArray())
+            }
+            snack(getString(R.string.snack_exported, uri.lastPathSegment ?: "csv"))
+        } catch (e: Exception) {
+            snack(getString(R.string.snack_export_failed))
+        }
+    }
+
+    private val importLauncher = registerForActivityResult(
+        ActivityResultContracts.OpenDocument()
+    ) { uri: Uri? ->
+        if (uri == null) return@registerForActivityResult
+        try {
+            val text = requireContext().contentResolver.openInputStream(uri)
+                ?.use { it.readBytes().decodeToString() } ?: ""
+            val entries = HistoryCsv.fromCsv(text)
+            val added = HistoryStore.forActive(requireContext())
+                .appendAllSkippingDuplicates(entries)
+            val suffix = if (added == 1) getString(R.string.entry_singular)
+            else getString(R.string.entry_plural)
+            snack(getString(R.string.snack_imported, added, suffix))
+        } catch (e: Exception) {
+            snack(getString(R.string.snack_import_failed))
+        }
+    }
+
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
         buildRangeRows(view.findViewById(R.id.rangesHolder))
         wireReminder(view)
+        wireTts(view)
+        wireBackup(view)
+    }
+
+    private fun wireTts(view: View) {
+        val sw = view.findViewById<MaterialSwitch>(R.id.ttsSwitch)
+        sw.isChecked = store.ttsEnabled
+        sw.setOnCheckedChangeListener { _, checked ->
+            store.ttsEnabled = checked
+        }
+    }
+
+    private fun wireBackup(view: View) {
+        view.findViewById<MaterialButton>(R.id.exportButton).setOnClickListener {
+            val name = "pwt_history_${System.currentTimeMillis()}.csv"
+            exportLauncher.launch(name)
+        }
+        view.findViewById<MaterialButton>(R.id.importButton).setOnClickListener {
+            importLauncher.launch(arrayOf("text/csv", "text/comma-separated-values", "*/*"))
+        }
     }
 
     // -------------------------------------------------------------- ranges
@@ -96,9 +155,9 @@ class SettingsFragment : Fragment() {
         val minEdit = makeFloatEdit(current.min)
         val idealEdit = makeFloatEdit(current.ideal)
         val maxEdit = makeFloatEdit(current.max)
-        row.addView(labelled(ctx, "min", minEdit))
-        row.addView(labelled(ctx, "ideal", idealEdit))
-        row.addView(labelled(ctx, "max", maxEdit))
+        row.addView(labelled(ctx, getString(R.string.range_min), minEdit))
+        row.addView(labelled(ctx, getString(R.string.range_ideal), idealEdit))
+        row.addView(labelled(ctx, getString(R.string.range_max), maxEdit))
 
         val watcher = object : TextWatcher {
             override fun beforeTextChanged(s: CharSequence?, st: Int, c: Int, a: Int) {}
@@ -166,7 +225,10 @@ class SettingsFragment : Fragment() {
             store.reminderIntervalDays = n
             if (!enabled) {
                 ReminderScheduler.disable(requireContext())
-                status.text = "Reminders off"
+                status.text = getString(R.string.settings_reminder_off)
+                com.example.poolwatertester.widget.PoolWaterWidget
+                    .refreshAll(requireContext())
+                if (reschedule) snack(getString(R.string.snack_reminder_off))
                 return
             }
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
@@ -174,14 +236,16 @@ class SettingsFragment : Fragment() {
                     requireContext(), Manifest.permission.POST_NOTIFICATIONS
                 ) != PackageManager.PERMISSION_GRANTED
             ) {
-                // We need the runtime permission before any notification will
-                // actually appear. Request it; the callback re-runs the
-                // scheduling on grant, or flips the switch back on deny.
                 requestNotifPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
-                status.text = "Asking for notification permission…"
+                status.text = getString(R.string.settings_reminder_asking)
                 return
             }
-            if (reschedule) scheduleNow()
+            if (reschedule) {
+                scheduleNow()
+                snack(getString(R.string.snack_reminder_on))
+            } else {
+                scheduleNow()  // refresh status line silently
+            }
         }
 
         sw.setOnCheckedChangeListener { _, _ -> applySettings(true) }
@@ -206,10 +270,21 @@ class SettingsFragment : Fragment() {
     private fun scheduleNow() {
         ReminderScheduler.enable(requireContext(),
             store.reminderIntervalDays, store.reminderHour, store.reminderMinute)
-        reminderStatusRef?.text = "Next reminder approx every " +
-            "${store.reminderIntervalDays} day(s) at " +
-            String.format(Locale.getDefault(), "%02d:%02d",
-                store.reminderHour, store.reminderMinute)
+        val timeStr = String.format(Locale.getDefault(), "%02d:%02d",
+            store.reminderHour, store.reminderMinute)
+        reminderStatusRef?.text = getString(
+            R.string.settings_reminder_on,
+            store.reminderIntervalDays, timeStr
+        )
+        com.example.poolwatertester.widget.PoolWaterWidget
+            .refreshAll(requireContext())
+    }
+
+    private fun snack(msg: String) {
+        val v = view ?: return
+        com.google.android.material.snackbar.Snackbar
+            .make(v, msg, com.google.android.material.snackbar.Snackbar.LENGTH_SHORT)
+            .show()
     }
 
     override fun onDestroyView() {

@@ -34,6 +34,15 @@
             android:orientation="vertical"
             android:paddingTop="12dp" />
 
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/detailDeleteButton"
+            style="?attr/materialButtonOutlinedStyle"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="end"
+            android:layout_marginTop="12dp"
+            android:text="@string/history_delete" />
+
     </LinearLayout>
 
 </androidx.core.widget.NestedScrollView>

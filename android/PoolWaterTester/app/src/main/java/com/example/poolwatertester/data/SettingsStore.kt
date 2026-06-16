@@ -4,11 +4,12 @@ import android.content.Context
 import android.content.SharedPreferences
 import androidx.core.content.edit
 
-/** SharedPreferences-backed store for per-parameter target ranges + the
- *  periodic reminder configuration. Settings/History fragments observe
- *  changes via `register/unregister` so the UI recolours / reschedules
- *  the moment the user edits a value. */
-class SettingsStore(context: Context) {
+/** SharedPreferences-backed store. Per-parameter target ranges are scoped
+ *  per profile (`range_<profileId>_<param>_<kind>`); reminder + TTS +
+ *  onboarding state stay app-global. Callers either pass in a profile id
+ *  explicitly or use [forActive] to bind to the currently-active one. */
+class SettingsStore(context: Context, val profileId: String) {
+
     private val prefs: SharedPreferences = context.applicationContext
         .getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
 
@@ -30,8 +31,18 @@ class SettingsStore(context: Context) {
         }
     }
 
+    /** Whether the parameter should appear in History charts/stats. The
+     *  reading is still measured and saved when present in the reference —
+     *  this only controls display. Default: shown. */
+    fun isParamShown(param: String): Boolean =
+        prefs.getBoolean(showKey(param), true)
+
+    fun setParamShown(param: String, shown: Boolean) {
+        prefs.edit { putBoolean(showKey(param), shown) }
+    }
+
     /** Seed sensible pool defaults for any parameter that has no range
-     *  configured yet. The user can edit them in Settings. */
+     *  configured yet (for the bound profile). User-editable in Settings. */
     fun seedDefaultsIfMissing(params: Collection<String>) {
         for (p in params) {
             if (rangeFor(p) != null) continue
@@ -39,7 +50,7 @@ class SettingsStore(context: Context) {
         }
     }
 
-    // ----------------------------------------------------------- reminder
+    // -------------------------------------------------------- app-global
 
     var reminderEnabled: Boolean
         get() = prefs.getBoolean(KEY_REMINDER_ENABLED, false)
@@ -57,6 +68,18 @@ class SettingsStore(context: Context) {
         get() = prefs.getInt(KEY_REMINDER_MINUTE, 0)
         set(value) = prefs.edit { putInt(KEY_REMINDER_MINUTE, value) }
 
+    var ttsEnabled: Boolean
+        get() = prefs.getBoolean(KEY_TTS_ENABLED, false)
+        set(value) = prefs.edit { putBoolean(KEY_TTS_ENABLED, value) }
+
+    var onboardingDone: Boolean
+        get() = prefs.getBoolean(KEY_ONBOARDING_DONE, false)
+        set(value) = prefs.edit { putBoolean(KEY_ONBOARDING_DONE, value) }
+
+    var activeProfileId: String?
+        get() = prefs.getString(KEY_ACTIVE_PROFILE_ID, null)
+        set(value) = prefs.edit { putString(KEY_ACTIVE_PROFILE_ID, value) }
+
     // ----------------------------------------------------------- listeners
 
     fun registerListener(l: SharedPreferences.OnSharedPreferenceChangeListener) {
@@ -67,7 +90,10 @@ class SettingsStore(context: Context) {
         prefs.unregisterOnSharedPreferenceChangeListener(l)
     }
 
-    private fun rangeKey(param: String, kind: String) = "range_${param}_$kind"
+    private fun rangeKey(param: String, kind: String) =
+        "range_${profileId}_${param}_$kind"
+
+    private fun showKey(param: String) = "show_${profileId}_$param"
 
     companion object {
         const val PREFS_NAME = "pwt_settings"
@@ -75,6 +101,9 @@ class SettingsStore(context: Context) {
         const val KEY_REMINDER_INTERVAL_DAYS = "reminder_interval_days"
         const val KEY_REMINDER_HOUR = "reminder_hour"
         const val KEY_REMINDER_MINUTE = "reminder_minute"
+        const val KEY_TTS_ENABLED = "tts_enabled"
+        const val KEY_ONBOARDING_DONE = "onboarding_done"
+        const val KEY_ACTIVE_PROFILE_ID = "active_profile_id"
 
         /** Pool-standard defaults; user-editable in Settings. */
         val DEFAULT_RANGES = mapOf(
@@ -83,12 +112,10 @@ class SettingsStore(context: Context) {
             "PHMB" to TargetRange(30.0f, 40.0f, 50.0f),
         )
 
-        fun isRangeKey(key: String) = key.startsWith("range_")
-        fun paramFromRangeKey(key: String): String? {
-            if (!isRangeKey(key)) return null
-            val rest = key.removePrefix("range_")
-            val lastUnderscore = rest.lastIndexOf('_')
-            return if (lastUnderscore < 0) null else rest.substring(0, lastUnderscore)
+        /** Convenience: bind to the profile that ProfilesStore says is active. */
+        fun forActive(context: Context): SettingsStore {
+            val id = ProfilesStore(context).activeId()
+            return SettingsStore(context, id)
         }
     }
 }

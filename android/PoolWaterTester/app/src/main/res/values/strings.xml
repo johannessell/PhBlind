@@ -1,3 +1,125 @@
 <resources>
     <string name="app_name">PoolWaterTester</string>
+
+    <!-- bottom nav -->
+    <string name="nav_measure">Measure</string>
+    <string name="nav_history">History</string>
+    <string name="nav_settings">Settings</string>
+
+    <!-- measure -->
+    <string name="measure">Measure</string>
+    <string name="save">Save</string>
+    <string name="discard">Discard</string>
+    <string name="reset">Reset</string>
+    <string name="edit_reference">Edit Reference</string>
+    <string name="save_frame">Save Frame</string>
+    <string name="status_starting">starting…</string>
+    <string name="status_searching">searching…</string>
+    <string name="status_tracking">tracking %1$d/%2$d</string>
+    <string name="status_measuring">measuring…</string>
+    <string name="status_no_clear_reading">no clear reading — keep steady</string>
+    <string name="status_param_unreliable">%1$s could not be measured reliably — please take another shot</string>
+    <string name="status_card_too_far">card too far — move closer</string>
+    <string name="status_card_too_close">card too close — pull back</string>
+    <string name="status_card_too_tilted">card too tilted — hold flat</string>
+    <string name="status_hold_steady">hold steady</string>
+    <string name="status_camera_denied">camera permission denied</string>
+    <string name="status_bind_failed">bind failed: %1$s</string>
+    <string name="status_capture_error">capture error: %1$s</string>
+    <string name="status_error">error: %1$s</string>
+    <string name="result_image_description">measurement result with grid overlay</string>
+    <string name="recent_card_title">Last saved measurement</string>
+    <string name="snack_saved">Saved</string>
+    <string name="snack_discarded">Discarded</string>
+    <string name="snack_deleted">Deleted</string>
+    <string name="snack_cleared">Cleared %1$d entr%2$s</string>
+    <string name="entry_singular">y</string>
+    <string name="entry_plural">ies</string>
+    <string name="snack_imported">Imported %1$d entr%2$s</string>
+    <string name="snack_exported">Exported to %1$s</string>
+    <string name="snack_export_failed">Export failed</string>
+    <string name="snack_import_failed">Import failed</string>
+    <string name="snack_reminder_on">Reminder on</string>
+    <string name="snack_reminder_off">Reminder off</string>
+
+    <!-- history -->
+    <string name="history_title">History</string>
+    <string name="history_clear">Clear</string>
+    <string name="history_empty">No measurements yet</string>
+    <string name="history_delete">Delete</string>
+    <string name="confirm_delete_one_title">Delete this measurement?</string>
+    <string name="confirm_delete_one_message">The raw frame and overlay stay on disk for replay. This cannot be undone.</string>
+    <string name="confirm_clear_all_title">Clear all measurements?</string>
+    <string name="confirm_clear_all_message">Removes every history entry for this pool. Raw frames stay on disk for replay.</string>
+    <string name="cancel">Cancel</string>
+    <string name="ok">OK</string>
+
+    <!-- chart status pills -->
+    <string name="pill_in_range">✓ OK</string>
+    <string name="pill_near">⚠ NEAR</string>
+    <string name="pill_out">✕ OUT</string>
+    <string name="pill_unknown">?</string>
+
+    <!-- statistics -->
+    <string name="stats_title">Statistics (last 30 days)</string>
+    <string name="stats_mean">mean</string>
+    <string name="stats_delta">Δ7d</string>
+    <string name="stats_in_range">in range</string>
+
+    <!-- settings -->
+    <string name="settings_ranges_header">Target Ranges</string>
+    <string name="settings_reminder_header">Reminder</string>
+    <string name="settings_reminder_switch">Remind me to test water</string>
+    <string name="settings_reminder_days_label">Every (days)</string>
+    <string name="settings_reminder_time_label">At time</string>
+    <string name="settings_reminder_default_time">09:00</string>
+    <string name="settings_reminder_off">Reminders off</string>
+    <string name="settings_reminder_on">Next reminder approx every %1$d day(s) at %2$s</string>
+    <string name="settings_reminder_asking">Asking for notification permission…</string>
+    <string name="settings_reminder_denied">Notifications denied — reminders disabled</string>
+    <string name="settings_tts_header">Voice readout</string>
+    <string name="settings_tts_switch">Speak result after Save</string>
+    <string name="settings_backup_header">Backup</string>
+    <string name="settings_backup_export">Export history (CSV)</string>
+    <string name="settings_backup_import">Import history (CSV)</string>
+    <string name="settings_profile_header">Active pool</string>
+    <string name="settings_profile_note">Pool profile is changed from the chip at the top.</string>
+    <string name="range_min">min</string>
+    <string name="range_ideal">ideal</string>
+    <string name="range_max">max</string>
+
+    <!-- profiles -->
+    <string name="profile_default_name">My pool</string>
+    <string name="profile_switcher_title">Switch pool</string>
+    <string name="profile_add">Add pool</string>
+    <string name="profile_rename">Rename</string>
+    <string name="profile_delete">Delete</string>
+    <string name="profile_name_hint">Pool name</string>
+    <string name="profile_create_title">New pool</string>
+    <string name="profile_rename_title">Rename pool</string>
+    <string name="confirm_delete_profile_title">Delete this pool?</string>
+    <string name="confirm_delete_profile_message">Removes its history and ranges. Cannot be undone.</string>
+
+    <!-- onboarding -->
+    <string name="onboarding_next">Next</string>
+    <string name="onboarding_done">Done</string>
+    <string name="onboarding_skip">Skip</string>
+    <string name="onboarding_page1_title">Align the card</string>
+    <string name="onboarding_page1_body">Place the test strip card flat under good light. Fit it inside the dashed guide rectangle and hold steady — the overlay turns green when locked.</string>
+    <string name="onboarding_page2_title">Pick your target ranges</string>
+    <string name="onboarding_page2_body">Set the in-range band for each parameter. You can refine these any time from Settings.</string>
+    <string name="onboarding_page3_title">Stay on schedule</string>
+    <string name="onboarding_page3_body">Turn on reminders so you don\'t forget the weekly test.</string>
+
+    <!-- reminder notification -->
+    <string name="notif_channel_name">Pool water reminders</string>
+    <string name="notif_channel_description">Reminds you to test your pool water.</string>
+    <string name="notif_title">Time to test your pool water</string>
+    <string name="notif_text">Open the app to take a measurement.</string>
+
+    <!-- widget -->
+    <string name="widget_description">Latest pool water reading + next reminder</string>
+    <string name="widget_empty">No measurements yet</string>
+    <string name="widget_next_reminder">Next reminder: %1$s</string>
+    <string name="widget_no_reminder">No reminder set</string>
 </resources>

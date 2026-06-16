@@ -8,6 +8,7 @@ import android.graphics.BitmapFactory
 import android.graphics.Color
 import android.graphics.Typeface
 import android.os.Bundle
+import android.speech.tts.TextToSpeech
 import android.util.Log
 import android.util.Size
 import android.view.Gravity
@@ -61,11 +62,21 @@ class MeasureFragment : Fragment() {
     @Volatile private var measuring = false
     @Volatile private var locked = false
 
+    /** Result + ts captured at success and consumed by the Save button.
+     *  Discard / reset clears them without writing to history. */
+    private var pendingRes: PyObject? = null
+    private var pendingTs: Long = 0L
+
+    /** Lazily-initialised TTS engine. We init on first Save (rather than
+     *  onCreate) because the user might never enable the toggle. */
+    private var tts: TextToSpeech? = null
+    private var ttsReady: Boolean = false
+
     private val requestPermission = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { granted ->
         if (granted) startCamera()
-        else _binding?.status?.text = "camera permission denied"
+        else _binding?.status?.text = getString(R.string.status_camera_denied)
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -73,8 +84,8 @@ class MeasureFragment : Fragment() {
         val py = Python.getInstance()
         analyzer = py.getModule("analyzer")
         measurement = py.getModule("measurement")
-        historyStore = HistoryStore(requireContext())
-        settingsStore = SettingsStore(requireContext())
+        historyStore = HistoryStore.forActive(requireContext())
+        settingsStore = SettingsStore.forActive(requireContext())
         settingsStore.seedDefaultsIfMissing(SettingsStore.DEFAULT_RANGES.keys)
         cameraExecutor = Executors.newSingleThreadExecutor()
     }
@@ -89,7 +100,24 @@ class MeasureFragment : Fragment() {
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
         binding.measureButton.setOnClickListener {
-            if (locked) resetState() else runMeasurement()
+            if (!locked && !measuring) runMeasurement()
+        }
+        binding.saveButton.setOnClickListener {
+            val res = pendingRes
+            val ts = pendingTs
+            if (res != null && ts > 0L) {
+                appendToHistory(res, ts)
+                snack(getString(R.string.snack_saved))
+                if (settingsStore.ttsEnabled) speakResult(res)
+                refreshRecentCard()
+                com.example.poolwatertester.widget.PoolWaterWidget
+                    .refreshAll(requireContext())
+            }
+            resetState()
+        }
+        binding.discardButton.setOnClickListener {
+            snack(getString(R.string.snack_discarded))
+            resetState()
         }
         binding.editReferenceButton.setOnClickListener {
             startActivity(Intent(requireContext(), ReferenceActivity::class.java))
@@ -101,12 +129,125 @@ class MeasureFragment : Fragment() {
         ) requestPermission.launch(Manifest.permission.CAMERA)
     }
 
+    private fun snack(msg: String) {
+        val v = view ?: return
+        com.google.android.material.snackbar.Snackbar
+            .make(v, msg, com.google.android.material.snackbar.Snackbar.LENGTH_SHORT)
+            .show()
+    }
+
+    /** Reads the per-parameter result aloud using the user's TTS engine.
+     *  Lazily initialised on first call; ranges drive the spoken status. */
+    private fun speakResult(res: PyObject) {
+        if (tts == null) {
+            tts = TextToSpeech(requireContext().applicationContext) { status ->
+                ttsReady = status == TextToSpeech.SUCCESS
+                if (ttsReady) doSpeak(res)
+            }
+        } else if (ttsReady) {
+            doSpeak(res)
+        }
+    }
+
+    private fun doSpeak(res: PyObject) {
+        val resultsPy = res.asMap()[PyObject.fromJava("results")]?.asMap() ?: return
+        val parts = StringBuilder()
+        for ((k, v) in resultsPy) {
+            val name = k.toString()
+            val valuePy = v.asMap()[PyObject.fromJava("value")]
+            val value = valuePy?.toString()?.toFloatOrNull() ?: continue
+            val range = settingsStore.rangeFor(name)
+            val statusWords = when (range?.classify(value)) {
+                com.example.poolwatertester.data.Status.IN_RANGE -> "in range"
+                com.example.poolwatertester.data.Status.NEAR -> "near limit"
+                com.example.poolwatertester.data.Status.OUT -> "out of range"
+                else -> ""
+            }
+            parts.append(name).append(' ')
+                .append(String.format(java.util.Locale.US, "%.2f", value))
+            if (statusWords.isNotEmpty()) parts.append(", ").append(statusWords)
+            parts.append(". ")
+        }
+        tts?.speak(parts.toString(), TextToSpeech.QUEUE_FLUSH, null, "pwt")
+    }
+
+    private fun showSavedControls() {
+        val b = _binding ?: return
+        b.liveControls.visibility = View.GONE
+        b.savedControls.visibility = View.VISIBLE
+        b.measureButton.isEnabled = true   // doesn't matter; hidden
+    }
+
+    private fun showLiveControls() {
+        val b = _binding ?: return
+        b.savedControls.visibility = View.GONE
+        b.liveControls.visibility = View.VISIBLE
+        b.measureButton.text = getString(R.string.measure)
+        b.measureButton.isEnabled = true
+    }
+
     override fun onResume() {
         super.onResume()
         reloadReference()
+        refreshRecentCard()
         if (ContextCompat.checkSelfPermission(requireContext(), Manifest.permission.CAMERA)
             == PackageManager.PERMISSION_GRANTED
         ) startCamera()
+    }
+
+    /** Surface the last saved measurement at the top so the user sees the
+     *  baseline before lining up the next reading. Hidden when there's no
+     *  history. */
+    private fun refreshRecentCard() {
+        val b = _binding ?: return
+        val entries = historyStore.loadAll()
+        val last = entries.lastOrNull()
+        if (last == null) {
+            b.recentCard.visibility = View.GONE
+            return
+        }
+        b.recentCard.visibility = View.VISIBLE
+        val when_ = android.text.format.DateUtils.getRelativeTimeSpanString(
+            last.ts, System.currentTimeMillis(),
+            android.text.format.DateUtils.MINUTE_IN_MILLIS
+        )
+        b.recentTitle.text = "${getString(R.string.recent_card_title)}  •  $when_"
+        b.recentPills.removeAllViews()
+        val ctx = requireContext()
+        for ((param, value) in last.results) {
+            val range = settingsStore.rangeFor(param)
+            val status = range?.classify(value) ?: com.example.poolwatertester.data.Status.UNKNOWN
+            b.recentPills.addView(buildPill(ctx, param, value, status))
+        }
+    }
+
+    private fun buildPill(
+        ctx: android.content.Context, param: String, value: Float,
+        status: com.example.poolwatertester.data.Status,
+    ): View {
+        val (symbol, bg) = when (status) {
+            com.example.poolwatertester.data.Status.IN_RANGE ->
+                getString(R.string.pill_in_range) to R.drawable.pill_in_range
+            com.example.poolwatertester.data.Status.NEAR ->
+                getString(R.string.pill_near) to R.drawable.pill_near
+            com.example.poolwatertester.data.Status.OUT ->
+                getString(R.string.pill_out) to R.drawable.pill_out
+            else ->
+                getString(R.string.pill_unknown) to R.drawable.pill_unknown
+        }
+        val text = "$param ${String.format(java.util.Locale.US, "%.2f", value)}  $symbol"
+        return TextView(ctx).apply {
+            this.text = text
+            setTextColor(android.graphics.Color.WHITE)
+            textSize = 12f
+            setBackgroundResource(bg)
+            val lp = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            )
+            lp.marginEnd = (resources.displayMetrics.density * 6).toInt()
+            layoutParams = lp
+        }
     }
 
     private fun reloadReference() {
@@ -161,9 +302,26 @@ class MeasureFragment : Fragment() {
                 )
             } catch (e: Exception) {
                 Log.e(TAG, "bind failed", e)
-                b.status.text = "bind failed: ${e.message}"
+                b.status.text = getString(R.string.status_bind_failed, e.message ?: "")
             }
         }, ContextCompat.getMainExecutor(ctx))
+    }
+
+    /** Pick the most useful live status string. Priority: searching →
+     *  too far / too close / too tilted → tracking with progress. */
+    private fun liveHint(
+        found: Boolean, tilt: Float, areaFrac: Float, expectedArea: Float,
+        progress: Int, required: Int,
+    ): String {
+        if (!found) return getString(R.string.status_searching)
+        val low = 0.5f * expectedArea
+        val high = 1.5f * expectedArea
+        return when {
+            areaFrac < low -> getString(R.string.status_card_too_far)
+            areaFrac > high -> getString(R.string.status_card_too_close)
+            tilt > 12f -> getString(R.string.status_card_too_tilted)
+            else -> getString(R.string.status_tracking, progress, required)
+        }
     }
 
     private fun analyzeFrame(image: ImageProxy) {
@@ -184,6 +342,12 @@ class MeasureFragment : Fragment() {
             val required = m[PyObject.fromJava("required")]?.toInt() ?: 1
             val frameW = m[PyObject.fromJava("width")]?.toInt() ?: 0
             val frameH = m[PyObject.fromJava("height")]?.toInt() ?: 0
+            val tilt = m[PyObject.fromJava("tilt_deg")]
+                ?.toString()?.toFloatOrNull() ?: 0f
+            val areaFrac = m[PyObject.fromJava("area_frac")]
+                ?.toString()?.toFloatOrNull() ?: 0f
+            val expectedArea = m[PyObject.fromJava("expected_area_frac")]
+                ?.toString()?.toFloatOrNull() ?: 0.4f
             val quad = if (found) {
                 val lst = m[PyObject.fromJava("quad")]!!.asList()
                 FloatArray(8).also { arr ->
@@ -195,11 +359,12 @@ class MeasureFragment : Fragment() {
                 }
             } else null
 
+            val hint = liveHint(found, tilt, areaFrac, expectedArea,
+                progress, required)
             postUi {
                 val b = _binding ?: return@postUi
                 b.overlay.update(quad, frameW, frameH, progress, required, stable)
-                b.status.text = if (found) "tracking ${progress}/${required}"
-                else "searching..."
+                b.status.text = hint
             }
 
             if (stable && !measuring && !locked) {
@@ -216,6 +381,8 @@ class MeasureFragment : Fragment() {
     private fun resetState() {
         locked = false
         measuring = false
+        pendingRes = null
+        pendingTs = 0L
         measurement.callAttr("reset_stability")
         val b = _binding ?: return
         b.overlay.clear()
@@ -225,8 +392,8 @@ class MeasureFragment : Fragment() {
         b.results.text = ""
         b.resultsRows.visibility = View.GONE
         b.resultsRows.removeAllViews()
-        b.measureButton.text = "Measure"
-        b.status.text = "searching..."
+        showLiveControls()
+        b.status.text = getString(R.string.status_searching)
     }
 
     private fun runMeasurement() {
@@ -234,7 +401,7 @@ class MeasureFragment : Fragment() {
         measuring = true
         val b = _binding ?: return
         b.measureButton.isEnabled = false
-        showStatusText("measuring...")
+        showStatusText(getString(R.string.status_measuring))
 
         capture.takePicture(
             ContextCompat.getMainExecutor(requireContext()),
@@ -259,28 +426,31 @@ class MeasureFragment : Fragment() {
                             )
                             val ts = logMeasurement(rotated, res)
                             if (isPlausible(res)) {
-                                appendToHistory(res, ts)
+                                // Hold the result for the user's Save decision;
+                                // do NOT auto-append to history.
+                                pendingRes = res
+                                pendingTs = ts
                                 val overlay = decodeOverlay(res)
                                 postUi {
                                     val bb = _binding ?: return@postUi
                                     if (overlay != null)
                                         bb.resultImage.setImageBitmap(overlay)
                                     showResultRows(res)
-                                    bb.measureButton.isEnabled = true
-                                    bb.measureButton.text = "Reset"
+                                    showSavedControls()
                                     locked = true
                                     measuring = false
                                 }
                             } else {
+                                val msg = errorMessage(res)
+                                    ?: getString(R.string.status_no_clear_reading)
                                 postUi {
                                     val bb = _binding ?: return@postUi
                                     bb.resultImage.visibility = View.GONE
                                     bb.resultsCard.visibility = View.GONE
                                     bb.results.visibility = View.GONE
                                     bb.resultsRows.visibility = View.GONE
-                                    bb.measureButton.isEnabled = true
-                                    bb.measureButton.text = "Measure"
-                                    bb.status.text = "no clear reading — keep steady"
+                                    showLiveControls()
+                                    bb.status.text = msg
                                     locked = false
                                     measuring = false
                                     measurement.callAttr("reset_stability")
@@ -293,8 +463,8 @@ class MeasureFragment : Fragment() {
                             postUi {
                                 val bb = _binding ?: return@postUi
                                 bb.resultImage.visibility = View.GONE
-                                showStatusText("error: ${e.message}")
-                                bb.measureButton.isEnabled = true
+                                showStatusText(getString(R.string.status_error, e.message ?: ""))
+                                showLiveControls()
                                 locked = false
                                 measuring = false
                                 measurement.callAttr("reset_stability")
@@ -306,23 +476,37 @@ class MeasureFragment : Fragment() {
                 override fun onError(exc: ImageCaptureException) {
                     Log.e(TAG, "capture failed", exc)
                     val bb = _binding ?: return
-                    showStatusText("capture error: ${exc.message}")
+                    showStatusText(getString(R.string.status_capture_error, exc.message ?: ""))
                     bb.measureButton.isEnabled = true
                     measuring = false
                 }
             })
     }
 
-    /** Plausible = card found, grid re-detected OK, at least one parameter
-     *  measured. Drives "show result" vs "return to live view". */
+    /** Plausible = card found, grid re-detected OK, at least one
+     *  parameter measured AND no strict parameter (e.g. pH) reported an
+     *  error. A strict-projection error means a known-biased fallback
+     *  would have to be used — refuse to save and force a retake. */
     private fun isPlausible(res: PyObject): Boolean {
         val m = res.asMap()
         val found = m[PyObject.fromJava("found")]?.toBoolean() ?: false
         if (!found) return false
         val gridOk = m[PyObject.fromJava("grid_ok")]?.toBoolean() ?: false
         if (!gridOk) return false
+        val errors = m[PyObject.fromJava("errors")]?.asMap()
+        if (errors != null && errors.isNotEmpty()) return false
         val results = m[PyObject.fromJava("results")]?.asMap() ?: return false
         return results.isNotEmpty()
+    }
+
+    /** Returns a user-facing message describing which strict parameters
+     *  failed, or null if the result has no error entries. */
+    private fun errorMessage(res: PyObject): String? {
+        val errors = res.asMap()[PyObject.fromJava("errors")]?.asMap()
+            ?: return null
+        if (errors.isEmpty()) return null
+        val params = errors.keys.joinToString(", ") { it.toString() }
+        return getString(R.string.status_param_unreliable, params)
     }
 
     private fun decodeOverlay(res: PyObject): Bitmap? {
@@ -528,6 +712,7 @@ class MeasureFragment : Fragment() {
     override fun onDestroy() {
         super.onDestroy()
         cameraExecutor.shutdown()
+        tts?.shutdown(); tts = null
     }
 
     companion object {
